@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700&display=swap" rel="stylesheet" />
+</head>
+
+<body style="
+      font-family: 'Nunito', sans-serif;
+      font-size: 14px;
+      color: #717171;
+      line-height: 1.8;
+      max-width: 600px;
+      margin: auto;
+    ">
+  <div style="width: 90%; margin: 30px auto">
+    <div style="
+          border: 1px solid #e9e9e9;
+          background-color: #ffffff;
+          padding: 30px;
+          border-radius: 20px;
+          margin-top: 20px;
+        ">
+        <div class="ant-image" style="text-align: center;">
+          <img
+            alt="LogoSelaras"
+            class="ant-image-img"
+            style="width: 260px"
+            src="https://yusnar.my.id/api-go-bm_binus/images/logo-selaras.png"
+          />
+        </div>
+        <br>
+      <p style="margin: 0; text-align: left">
+        Hello {{.NAME}}, Welcome to SelarasHomeId, here is your login information to the SelarasHomeId application:
+      </p>
+      
+      <table style="border-collapse:collapse;border-spacing:0;width: 100%;" class="tg">
+        <colgroup>
+          <col style="width: 30%">
+          <col style="width: 5%">
+          <col style="width: 65%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th
+              style="font-size:14px;font-weight:normal;overflow:hidden;text-align:left;vertical-align:top;word-break:normal">
+              Email</th>
+            <th
+              style="margin-right:5px;font-size:14px;font-weight:normal;overflow:hidden;text-align:left;vertical-align:top;word-break:normal">
+              :</th>
+            <th
+              style="font-size:14px;font-weight:normal;overflow:hidden;text-align:left;vertical-align:top;word-break:normal">
+              {{.EMAIL}}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td
+              style="font-size:14px;overflow:hidden;text-align:left;vertical-align:top;word-break:normal">
+              Password</td>
+            <td
+              style="font-size:14px;overflow:hidden;text-align:left;vertical-align:top;word-break:normal">
+              :</td>
+            <td
+              style="font-size:14px;overflow:hidden;text-align:left;vertical-align:top;word-break:normal">
+              {{.PASSWORD}}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <a href="{{.LINK}}" target="_blank" style="text-decoration: none">
+        <p style="
+              color: #ffffff;
+              background-color: rgb(64, 169, 255);
+              margin: 30px auto;
+              text-align: center;
+              padding: 10px 20px;
+              border-radius: 5px;
+              width: 120px;
+            ">
+          Click to link
+        </p>
+      </a>
+
+      <hr>
+      <p style="color: #717171; font-size: 12px;">
+        Email ini dibuat secara otomatis. Mohon tidak mengirimkan balasan ke
+        email ini
+      </p>
+    </div>
+  </div>
+</body>
+
+</html>
