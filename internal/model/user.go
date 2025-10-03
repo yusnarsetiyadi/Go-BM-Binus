@@ -2,19 +2,16 @@ package model
 
 import (
 	"bm_binus/internal/abstraction"
-	"bm_binus/pkg/util/general"
 
 	"gorm.io/gorm"
 )
 
 type UserEntity struct {
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	RoleId    int    `json:"role_id"`
-	IsDelete  bool   `json:"is_delete"`
-	IsLocked  bool   `json:"is_locked"`
-	LoginFrom string `json:"login_from"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	RoleId   int    `json:"role_id"`
+	IsDelete bool   `json:"is_delete"`
 }
 
 // UserEntityModel ...
@@ -42,7 +39,7 @@ type UserCountDataModel struct {
 }
 
 func (m *UserEntityModel) BeforeUpdate(tx *gorm.DB) (err error) {
-	m.UpdatedAt = general.NowLocal()
+	// m.UpdatedAt = general.NowLocal()
 	return
 }
 

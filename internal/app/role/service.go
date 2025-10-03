@@ -50,10 +50,8 @@ func (s *service) Find(ctx *abstraction.Context) (map[string]interface{}, error)
 	var res []map[string]interface{} = nil
 	for _, v := range data {
 		res = append(res, map[string]interface{}{
-			"id":          v.ID,
-			"name":        v.Name,
-			"description": v.Description,
-			"is_delete":   v.IsDelete,
+			"id":   v.ID,
+			"name": v.Name,
 		})
 	}
 	return map[string]interface{}{
@@ -78,15 +76,12 @@ func (s *service) Export(ctx *abstraction.Context) (string, *bytes.Buffer, error
 	f.SetActiveSheet(index)
 	f.SetCellValue(sheet, "A1", "No")
 	f.SetCellValue(sheet, "B1", "Nama")
-	f.SetCellValue(sheet, "C1", "Deskripsi")
 	for i, v := range data {
 		colA := fmt.Sprintf("A%d", i+2)
 		colB := fmt.Sprintf("B%d", i+2)
-		colC := fmt.Sprintf("C%d", i+2)
 		no := i + 1
 		f.SetCellValue(sheet, colA, no)
 		f.SetCellValue(sheet, colB, v.Name)
-		f.SetCellValue(sheet, colC, v.Description)
 	}
 
 	var buf bytes.Buffer

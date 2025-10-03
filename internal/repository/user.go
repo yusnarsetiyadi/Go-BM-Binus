@@ -16,8 +16,6 @@ type User interface {
 	FindById(ctx *abstraction.Context, id int) (*model.UserEntityModel, error)
 	Update(ctx *abstraction.Context, data *model.UserEntityModel) *gorm.DB
 	UpdateDelete(ctx *abstraction.Context, data *model.UserEntityModel) *gorm.DB
-	UpdateLocked(ctx *abstraction.Context, data *model.UserEntityModel) *gorm.DB
-	UpdateLoginFrom(ctx *abstraction.Context, data *model.UserEntityModel) *gorm.DB
 	FindByRoleId(ctx *abstraction.Context, role_id int) (*model.UserEntityModel, error)
 	FindByRoleIdArr(ctx *abstraction.Context, role_id int, no_paging bool) (data []*model.UserEntityModel, err error)
 }
@@ -102,14 +100,6 @@ func (r *user) Update(ctx *abstraction.Context, data *model.UserEntityModel) *go
 
 func (r *user) UpdateDelete(ctx *abstraction.Context, data *model.UserEntityModel) *gorm.DB {
 	return r.CheckTrx(ctx).Model(data).Where("id = ?", data.ID).Update("is_delete", data.IsDelete)
-}
-
-func (r *user) UpdateLocked(ctx *abstraction.Context, data *model.UserEntityModel) *gorm.DB {
-	return r.CheckTrx(ctx).Model(data).Where("id = ?", data.ID).Update("is_locked", data.IsLocked)
-}
-
-func (r *user) UpdateLoginFrom(ctx *abstraction.Context, data *model.UserEntityModel) *gorm.DB {
-	return r.CheckTrx(ctx).Model(data).Where("id = ?", data.ID).Update("login_from", data.LoginFrom)
 }
 
 func (r *user) FindByRoleId(ctx *abstraction.Context, role_id int) (*model.UserEntityModel, error) {

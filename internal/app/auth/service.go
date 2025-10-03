@@ -76,10 +76,6 @@ func (s *service) Login(ctx *abstraction.Context, payload *dto.AuthLoginRequest)
 			return response.ErrorBuilder(http.StatusUnauthorized, errors.New("unauthorized"), "email or password is incorrect")
 		}
 
-		if data.IsLocked {
-			return response.ErrorBuilder(http.StatusUnauthorized, errors.New("unauthorized"), "this account is locked")
-		}
-
 		var encryptedUserID string
 		if encryptedUserID, err = s.encryptTokenClaims(data.ID); err != nil {
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
@@ -105,13 +101,6 @@ func (s *service) Login(ctx *abstraction.Context, payload *dto.AuthLoginRequest)
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 		}
 
-		userData := new(model.UserEntityModel)
-		userData.Context = ctx
-		userData.ID = data.ID
-		userData.LoginFrom = general.ProcessLoginFrom(payload.LoginFrom, data.LoginFrom)
-		if err := s.UserRepository.UpdateLoginFrom(ctx, userData).Error; err != nil {
-			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
-		}
 		general.AppendUUIDToRedisArray(s.DbRedis, general.GenerateRedisKeyUserLogin(data.ID), uuidUserLogin)
 
 		return nil
@@ -137,22 +126,6 @@ func (s *service) Login(ctx *abstraction.Context, payload *dto.AuthLoginRequest)
 
 func (s *service) Logout(ctx *abstraction.Context, payload *dto.AuthLogoutRequest) (map[string]interface{}, error) {
 	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
-		data, err := s.UserRepository.FindById(ctx, ctx.Auth.ID)
-		if err != nil && err.Error() != "record not found" {
-			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
-		}
-
-		loginFrom := ""
-		if data != nil {
-			loginFrom = data.LoginFrom
-		}
-		userData := new(model.UserEntityModel)
-		userData.Context = ctx
-		userData.ID = ctx.Auth.ID
-		userData.LoginFrom = general.ProcessLogoutFrom(loginFrom, payload.LogoutFrom)
-		if err := s.UserRepository.UpdateLoginFrom(ctx, userData).Error; err != nil {
-			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
-		}
 
 		general.RemoveUUIDFromRedisArray(s.DbRedis, general.GenerateRedisKeyUserLogin(ctx.Auth.ID), ctx.Auth.UuidLogin)
 		general.RemoveUUIDFromRedisArray(s.DbRedis, constant.REDIS_KEY_AUTO_LOGOUT, ctx.Auth.UuidLogin)

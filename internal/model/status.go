@@ -2,26 +2,26 @@ package model
 
 import "bm_binus/internal/abstraction"
 
-type RoleEntity struct {
+type StatusEntity struct {
 	Name string `json:"name"`
 }
 
-// RoleEntityModel ...
-type RoleEntityModel struct {
+// StatusEntityModel ...
+type StatusEntityModel struct {
 	ID int `json:"id" param:"id" form:"id" validate:"number,min=1" gorm:"primaryKey;autoIncrement;"`
 
 	// entity
-	RoleEntity
+	StatusEntity
 
 	// context
 	Context *abstraction.Context `json:"-" gorm:"-"`
 }
 
 // TableName ...
-func (RoleEntityModel) TableName() string {
-	return "role"
+func (StatusEntityModel) TableName() string {
+	return "status"
 }
 
-type RoleCountDataModel struct {
+type StatusCountDataModel struct {
 	Count int `json:"count"`
 }
