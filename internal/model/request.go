@@ -29,7 +29,8 @@ type RequestEntityModel struct {
 
 	abstraction.Entity
 
-	Status StatusEntityModel `json:"status" gorm:"foreignKey:StatusId"`
+	EventType EventTypeEntityModel `json:"event_type" gorm:"foreignKey:EventTypeId"`
+	Status    StatusEntityModel    `json:"status" gorm:"foreignKey:StatusId"`
 
 	// context
 	Context *abstraction.Context `json:"-" gorm:"-"`
