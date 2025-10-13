@@ -9,9 +9,8 @@ import (
 )
 
 type AuthLoginRequest struct {
-	Email     string `json:"email" form:"email" validate:"required"`
-	Password  string `json:"password" form:"password" validate:"required"`
-	LoginFrom string `json:"login_from" form:"login_from" validate:"required"`
+	Email    string `json:"email" form:"email" validate:"required"`
+	Password string `json:"password" form:"password" validate:"required"`
 }
 
 type RefreshTokenRequest struct {
@@ -54,8 +53,4 @@ type AuthSendEmailForgotPasswordRequest struct {
 
 type AuthValidationResetPasswordRequest struct {
 	Token string `param:"token" validate:"required"`
-}
-
-type AuthLogoutRequest struct {
-	LogoutFrom string `json:"logout_from" form:"logout_from" validate:"required"`
 }

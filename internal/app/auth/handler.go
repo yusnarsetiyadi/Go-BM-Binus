@@ -37,14 +37,7 @@ func (h *handler) Login(c echo.Context) error {
 }
 
 func (h *handler) Logout(c echo.Context) error {
-	payload := new(dto.AuthLogoutRequest)
-	if err := c.Bind(payload); err != nil {
-		return response.ErrorBuilder(http.StatusBadRequest, err, "error bind payload").SendError(c)
-	}
-	if err := c.Validate(payload); err != nil {
-		return response.ErrorBuilder(http.StatusBadRequest, err, "error validate payload").SendError(c)
-	}
-	data, err := h.service.Logout(c.(*abstraction.Context), payload)
+	data, err := h.service.Logout(c.(*abstraction.Context))
 	if err != nil {
 		return response.ErrorResponse(err).SendError(c)
 	}

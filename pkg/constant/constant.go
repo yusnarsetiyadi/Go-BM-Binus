@@ -20,5 +20,6 @@ const (
 )
 
 var (
-	BASE_URL string = ""
+	BASE_URL    string = ""
+	BASE_URL_UI string = "https://bmbinus.my.id/"
 )

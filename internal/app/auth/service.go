@@ -15,7 +15,6 @@ import (
 	"bm_binus/pkg/util/general"
 	"bm_binus/pkg/util/response"
 	"bm_binus/pkg/util/trxmanager"
-	"bm_binus/pkg/ws"
 	"context"
 	"errors"
 	"fmt"
@@ -30,7 +29,7 @@ import (
 
 type Service interface {
 	Login(ctx *abstraction.Context, payload *dto.AuthLoginRequest) (map[string]interface{}, error)
-	Logout(ctx *abstraction.Context, payload *dto.AuthLogoutRequest) (map[string]interface{}, error)
+	Logout(ctx *abstraction.Context) (map[string]interface{}, error)
 	RefreshToken(ctx *abstraction.Context) (map[string]interface{}, error)
 	SendEmailForgotPassword(ctx *abstraction.Context, payload *dto.AuthSendEmailForgotPasswordRequest) (map[string]interface{}, error)
 	ValidationResetPassword(ctx *abstraction.Context, payload *dto.AuthValidationResetPasswordRequest) (string, error)
@@ -124,7 +123,7 @@ func (s *service) Login(ctx *abstraction.Context, payload *dto.AuthLoginRequest)
 	}, nil
 }
 
-func (s *service) Logout(ctx *abstraction.Context, payload *dto.AuthLogoutRequest) (map[string]interface{}, error) {
+func (s *service) Logout(ctx *abstraction.Context) (map[string]interface{}, error) {
 	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
 
 		general.RemoveUUIDFromRedisArray(s.DbRedis, general.GenerateRedisKeyUserLogin(ctx.Auth.ID), ctx.Auth.UuidLogin)
@@ -183,7 +182,6 @@ func (s *service) RefreshToken(ctx *abstraction.Context) (map[string]interface{}
 }
 
 func (s *service) SendEmailForgotPassword(ctx *abstraction.Context, payload *dto.AuthSendEmailForgotPasswordRequest) (map[string]interface{}, error) {
-	var sendNotifTo []int = nil
 	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
 		data, err := s.UserRepository.FindByEmail(ctx, payload.Email)
 		if err != nil && err.Error() != "record not found" {
@@ -202,7 +200,7 @@ func (s *service) SendEmailForgotPassword(ctx *abstraction.Context, payload *dto
 
 		s.DbRedis.Set(context.Background(), *token, *token, 0)
 
-		if err = gomail.SendMail(data.Email, "Forgot Password for SelarasHomeId", general.ParseTemplateEmailToHtml("./assets/html/email/notif_forgot_password.html", struct {
+		if err = gomail.SendMail(data.Email, "Forgot Password for Building Management Binus", general.ParseTemplateEmailToHtml("./assets/html/email/notif_forgot_password.html", struct {
 			NAME  string
 			EMAIL string
 			LINK  string
@@ -217,12 +215,6 @@ func (s *service) SendEmailForgotPassword(ctx *abstraction.Context, payload *dto
 		return nil
 	}); err != nil {
 		return nil, err
-	}
-
-	for _, v := range general.RemoveDuplicateArrayInt(sendNotifTo) {
-		if err := ws.PublishNotificationWithoutTransaction(v, s.DB, ctx); err != nil {
-			return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
-		}
 	}
 
 	return map[string]interface{}{
@@ -269,7 +261,7 @@ func (s *service) ValidationResetPassword(ctx *abstraction.Context, payload *dto
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 		}
 
-		if err = gomail.SendMail(userData.Email, "Reset Password for SelarasHomeId", general.ParseTemplateEmailToHtml("./assets/html/email/notif_reset_password.html", struct {
+		if err = gomail.SendMail(userData.Email, "Reset Password for Building Management Binus", general.ParseTemplateEmailToHtml("./assets/html/email/notif_reset_password.html", struct {
 			NAME      string
 			RESETNAME string
 			EMAIL     string
@@ -280,7 +272,7 @@ func (s *service) ValidationResetPassword(ctx *abstraction.Context, payload *dto
 			RESETNAME: "System",
 			EMAIL:     userData.Email,
 			PASSWORD:  passwordString,
-			LINK:      constant.BASE_URL,
+			LINK:      constant.BASE_URL_UI,
 		})); err != nil {
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 		}
