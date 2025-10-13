@@ -31,7 +31,7 @@ func (r *role) FindById(ctx *abstraction.Context, id int) (*model.RoleEntityMode
 
 	var data model.RoleEntityModel
 	err := conn.
-		Where("id = ?", id, false).
+		Where("id = ?", id).
 		First(&data).
 		Error
 	if err != nil {

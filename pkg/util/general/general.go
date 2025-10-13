@@ -890,3 +890,20 @@ func TruncateSheetName(name string) string {
 	}
 	return name
 }
+
+func ConvertDateTimeToIndonesian(datetimeStr string) string {
+	t, _ := time.Parse("2006-01-02 15:04:05", datetimeStr)
+	days := []string{
+		"Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu",
+	}
+	months := []string{
+		"", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+		"Juli", "Agustus", "September", "Oktober", "November", "Desember",
+	}
+	dayName := days[int(t.Weekday())]
+	monthName := months[int(t.Month())]
+	formatted := fmt.Sprintf("%s, %d %s %d %02d:%02d",
+		dayName, t.Day(), monthName, t.Year(), t.Hour(), t.Minute())
+
+	return formatted
+}

@@ -28,11 +28,18 @@ func RedirectTo(c echo.Context, url string) error {
 	return c.Redirect(http.StatusFound, url)
 }
 
-func SendExcelData(c echo.Context, filename string, data bytes.Buffer) error {
-	c.Response().Header().Set(echo.HeaderContentType, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+func SendBlobData(c echo.Context, filename string, data bytes.Buffer, format string) error {
+	var mimeType string
+	switch format {
+	case "excel":
+		mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case "pdf":
+		mimeType = "application/pdf"
+	}
+	c.Response().Header().Set(echo.HeaderContentType, mimeType)
 	c.Response().Header().Set(echo.HeaderContentDisposition, fmt.Sprintf("attachment; filename=%s", filename))
 	c.Response().Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
 	c.Response().Header().Set(echo.HeaderContentLength, fmt.Sprint(len(data.Bytes())))
 
-	return c.Blob(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data.Bytes())
+	return c.Blob(http.StatusOK, mimeType, data.Bytes())
 }

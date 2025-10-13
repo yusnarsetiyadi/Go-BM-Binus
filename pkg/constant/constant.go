@@ -3,8 +3,9 @@ package constant
 const (
 	DRIVE_FOLDER = "BM_Binus_App"
 
-	ROLE_ID_ADMIN = 1
-	ROLE_ID_STAFF = 2
+	ROLE_ID_STAF = 1
+	ROLE_ID_BM   = 2
+	ROLE_ID_ISS  = 3
 
 	REDIS_REQUEST_IP_KEYS      = "reset-password:ip:%s"
 	REDIS_REQUEST_MAX_ATTEMPTS = 5

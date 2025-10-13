@@ -103,33 +103,17 @@ func (h handler) ChangePassword(c echo.Context) (err error) {
 	return response.SuccessResponse(data).SendSuccess(c)
 }
 
-func (h handler) ResetPassword(c echo.Context) (err error) {
-	payload := new(dto.UserResetPasswordRequest)
+func (h handler) Export(c echo.Context) (err error) {
+	payload := new(dto.UserExportRequest)
 	if err = c.Bind(payload); err != nil {
 		return response.ErrorBuilder(http.StatusBadRequest, err, "error bind payload").SendError(c)
 	}
 	if err = c.Validate(payload); err != nil {
 		return response.ErrorBuilder(http.StatusBadRequest, err, "error validate payload").SendError(c)
 	}
-	data, err := h.service.ResetPassword(c.(*abstraction.Context), payload)
+	filename, data, format, err := h.service.Export(c.(*abstraction.Context), payload)
 	if err != nil {
 		return response.ErrorResponse(err).SendError(c)
 	}
-	return response.SuccessResponse(data).SendSuccess(c)
-}
-
-func (h handler) GetUserInfo(c echo.Context) (err error) {
-	data, err := h.service.GetUserInfo(c.(*abstraction.Context))
-	if err != nil {
-		return response.ErrorResponse(err).SendError(c)
-	}
-	return response.SuccessResponse(data).SendSuccess(c)
-}
-
-func (h handler) Export(c echo.Context) (err error) {
-	filename, data, err := h.service.Export(c.(*abstraction.Context))
-	if err != nil {
-		return response.ErrorResponse(err).SendError(c)
-	}
-	return response.SendExcelData(c, filename, *data)
+	return response.SendBlobData(c, filename, *data, format)
 }

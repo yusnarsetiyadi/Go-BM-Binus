@@ -11,11 +11,10 @@ type UserFindByIDRequest struct {
 }
 
 type UserUpdateRequest struct {
-	ID       int     `param:"id" validate:"required"`
-	Name     *string `json:"name" form:"name"`
-	Email    *string `json:"email" form:"email"`
-	RoleId   *int    `json:"role_id" form:"role_id"`
-	IsLocked *bool   `json:"is_locked" form:"is_locked"`
+	ID     int     `param:"id" validate:"required"`
+	Name   *string `json:"name" form:"name"`
+	Email  *string `json:"email" form:"email"`
+	RoleId *int    `json:"role_id" form:"role_id"`
 }
 
 type UserDeleteByIDRequest struct {
@@ -28,6 +27,6 @@ type UserChangePasswordRequest struct {
 	NewPassword string `json:"new_password" form:"new_password" validate:"required"`
 }
 
-type UserResetPasswordRequest struct {
-	ID int `param:"id" validate:"required"`
+type UserExportRequest struct {
+	Format string `query:"format" validate:"required"`
 }
