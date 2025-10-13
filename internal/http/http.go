@@ -6,6 +6,7 @@ import (
 
 	"bm_binus/internal/app/auth"
 	"bm_binus/internal/app/role"
+	"bm_binus/internal/app/status"
 	user "bm_binus/internal/app/user"
 	"bm_binus/internal/config"
 	"bm_binus/internal/factory"
@@ -29,6 +30,7 @@ func Init(e *echo.Echo, f *factory.Factory) {
 	e.Static("/file_saved", constant.PATH_FILE_SAVED)
 
 	auth.NewHandler(f).Route(e.Group("/auth"))
-	user.NewHandler(f).Route(e.Group("/user"))
 	role.NewHandler(f).Route(e.Group("/role"))
+	status.NewHandler(f).Route(e.Group("/status"))
+	user.NewHandler(f).Route(e.Group("/user"))
 }

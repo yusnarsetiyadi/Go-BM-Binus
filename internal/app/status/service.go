@@ -1,4 +1,4 @@
-package role
+package status
 
 import (
 	"bm_binus/internal/abstraction"
@@ -15,25 +15,25 @@ type Service interface {
 }
 
 type service struct {
-	RoleRepository repository.Role
+	StatusRepository repository.Status
 
 	DB *gorm.DB
 }
 
 func NewService(f *factory.Factory) Service {
 	return &service{
-		RoleRepository: f.RoleRepository,
+		StatusRepository: f.StatusRepository,
 
 		DB: f.Db,
 	}
 }
 
 func (s *service) Find(ctx *abstraction.Context) (map[string]interface{}, error) {
-	data, err := s.RoleRepository.Find(ctx, false)
+	data, err := s.StatusRepository.Find(ctx, false)
 	if err != nil && err.Error() != "record not found" {
 		return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 	}
-	count, err := s.RoleRepository.Count(ctx)
+	count, err := s.StatusRepository.Count(ctx)
 	if err != nil && err.Error() != "record not found" {
 		return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 	}

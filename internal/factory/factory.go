@@ -23,8 +23,9 @@ type Factory struct {
 }
 
 type Repository_initiated struct {
-	UserRepository repository.User
-	RoleRepository repository.Role
+	UserRepository   repository.User
+	RoleRepository   repository.Role
+	StatusRepository repository.Status
 }
 
 type GoogleDrive struct {
@@ -83,4 +84,5 @@ func (f *Factory) SetupRepository() {
 
 	f.UserRepository = repository.NewUser(f.Db)
 	f.RoleRepository = repository.NewRole(f.Db)
+	f.StatusRepository = repository.NewStatus(f.Db)
 }

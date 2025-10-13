@@ -8,28 +8,28 @@ import (
 	"gorm.io/gorm"
 )
 
-type Role interface {
-	FindById(ctx *abstraction.Context, id int) (*model.RoleEntityModel, error)
-	Find(ctx *abstraction.Context, no_paging bool) (data []*model.RoleEntityModel, err error)
+type Status interface {
+	FindById(ctx *abstraction.Context, id int) (*model.StatusEntityModel, error)
+	Find(ctx *abstraction.Context, no_paging bool) (data []*model.StatusEntityModel, err error)
 	Count(ctx *abstraction.Context) (data *int, err error)
 }
 
-type role struct {
+type status struct {
 	abstraction.Repository
 }
 
-func NewRole(db *gorm.DB) *role {
-	return &role{
+func NewStatus(db *gorm.DB) *status {
+	return &status{
 		Repository: abstraction.Repository{
 			Db: db,
 		},
 	}
 }
 
-func (r *role) FindById(ctx *abstraction.Context, id int) (*model.RoleEntityModel, error) {
+func (r *status) FindById(ctx *abstraction.Context, id int) (*model.StatusEntityModel, error) {
 	conn := r.CheckTrx(ctx)
 
-	var data model.RoleEntityModel
+	var data model.StatusEntityModel
 	err := conn.
 		Where("id = ?", id, false).
 		First(&data).
@@ -40,8 +40,8 @@ func (r *role) FindById(ctx *abstraction.Context, id int) (*model.RoleEntityMode
 	return &data, nil
 }
 
-func (r *role) Find(ctx *abstraction.Context, no_paging bool) (data []*model.RoleEntityModel, err error) {
-	where, whereParam := general.ProcessWhereParam(ctx, "role", "")
+func (r *status) Find(ctx *abstraction.Context, no_paging bool) (data []*model.StatusEntityModel, err error) {
+	where, whereParam := general.ProcessWhereParam(ctx, "status", "")
 	limit, offset := general.ProcessLimitOffset(ctx, no_paging)
 	order := general.ProcessOrder(ctx)
 	err = r.CheckTrx(ctx).
@@ -54,11 +54,11 @@ func (r *role) Find(ctx *abstraction.Context, no_paging bool) (data []*model.Rol
 	return
 }
 
-func (r *role) Count(ctx *abstraction.Context) (data *int, err error) {
-	where, whereParam := general.ProcessWhereParam(ctx, "role", "")
-	var count model.RoleCountDataModel
+func (r *status) Count(ctx *abstraction.Context) (data *int, err error) {
+	where, whereParam := general.ProcessWhereParam(ctx, "status", "")
+	var count model.StatusCountDataModel
 	err = r.CheckTrx(ctx).
-		Table("role").
+		Table("status").
 		Select("COUNT(*) AS count").
 		Where(where, whereParam).
 		Find(&count).

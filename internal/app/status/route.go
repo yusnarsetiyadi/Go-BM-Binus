@@ -1,4 +1,4 @@
-package role
+package status
 
 import (
 	"bm_binus/internal/middleware"
