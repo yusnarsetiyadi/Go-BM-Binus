@@ -8,16 +8,16 @@ import (
 )
 
 type RequestEntity struct {
-	UserId           int        `json:"user_id"`
-	EventName        string     `json:"event_name"`
-	EventLocation    string     `json:"event_location"`
-	EventDateStart   *time.Time `json:"event_date_start"`
-	EventDateEnd     *time.Time `json:"event_date_end"`
-	Description      *string    `json:"description"`
-	EventTypeId      int        `json:"event_type_id"`
-	CountParticipant *int       `json:"count_participant"`
-	StatusId         int        `json:"status_id"`
-	IsDelete         bool       `json:"is_delete"`
+	UserId           int       `json:"user_id"`
+	EventName        string    `json:"event_name"`
+	EventLocation    string    `json:"event_location"`
+	EventDateStart   time.Time `json:"event_date_start"`
+	EventDateEnd     time.Time `json:"event_date_end"`
+	Description      string    `json:"description"`
+	EventTypeId      int       `json:"event_type_id"`
+	CountParticipant int       `json:"count_participant"`
+	StatusId         int       `json:"status_id"`
+	IsDelete         bool      `json:"is_delete"`
 }
 
 // RequestEntityModel ...

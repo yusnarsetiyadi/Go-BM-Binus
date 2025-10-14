@@ -27,6 +27,9 @@ type Repository_initiated struct {
 	RoleRepository         repository.Role
 	StatusRepository       repository.Status
 	NotificationRepository repository.Notification
+	RequestRepository      repository.Request
+	EventTypeRepository    repository.EventType
+	FileRepository         repository.File
 }
 
 type GoogleDrive struct {
@@ -87,4 +90,7 @@ func (f *Factory) SetupRepository() {
 	f.RoleRepository = repository.NewRole(f.Db)
 	f.StatusRepository = repository.NewStatus(f.Db)
 	f.NotificationRepository = repository.NewNotification(f.Db)
+	f.RequestRepository = repository.NewRequest(f.Db)
+	f.EventTypeRepository = repository.NewEventType(f.Db)
+	f.FileRepository = repository.NewFile(f.Db)
 }

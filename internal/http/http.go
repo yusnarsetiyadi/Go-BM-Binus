@@ -6,6 +6,7 @@ import (
 
 	"bm_binus/internal/app/auth"
 	"bm_binus/internal/app/notification"
+	"bm_binus/internal/app/request"
 	"bm_binus/internal/app/role"
 	"bm_binus/internal/app/status"
 	user "bm_binus/internal/app/user"
@@ -35,4 +36,5 @@ func Init(e *echo.Echo, f *factory.Factory) {
 	status.NewHandler(f).Route(e.Group("/status"))
 	user.NewHandler(f).Route(e.Group("/user"))
 	notification.NewHandler(f).Route(e.Group("/notification"))
+	request.NewHandler(f).Route(e.Group("/request"))
 }
