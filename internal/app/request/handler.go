@@ -2,6 +2,7 @@ package request
 
 import (
 	"bm_binus/internal/abstraction"
+	"bm_binus/internal/app/request/comment"
 	"bm_binus/internal/app/request/event_type"
 	"bm_binus/internal/dto"
 	"bm_binus/internal/factory"
@@ -16,6 +17,7 @@ type handler struct {
 	service Service
 
 	EventTypeHandler event_type.Handler
+	CommentHandler   comment.Handler
 }
 
 func NewHandler(f *factory.Factory) *handler {
@@ -23,6 +25,7 @@ func NewHandler(f *factory.Factory) *handler {
 		service: NewService(f),
 
 		EventTypeHandler: *event_type.NewHandler(f),
+		CommentHandler:   *comment.NewHandler(f),
 	}
 }
 

@@ -30,6 +30,7 @@ type Repository_initiated struct {
 	RequestRepository      repository.Request
 	EventTypeRepository    repository.EventType
 	FileRepository         repository.File
+	CommentRepository      repository.Comment
 }
 
 type GoogleDrive struct {
@@ -93,4 +94,5 @@ func (f *Factory) SetupRepository() {
 	f.RequestRepository = repository.NewRequest(f.Db)
 	f.EventTypeRepository = repository.NewEventType(f.Db)
 	f.FileRepository = repository.NewFile(f.Db)
+	f.CommentRepository = repository.NewComment(f.Db)
 }

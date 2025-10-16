@@ -13,6 +13,7 @@ type Request interface {
 	FindById(ctx *abstraction.Context, id int) (*model.RequestEntityModel, error)
 	Find(ctx *abstraction.Context, no_paging bool) (data []*model.RequestEntityModel, err error)
 	Count(ctx *abstraction.Context) (data *int, err error)
+	Update(ctx *abstraction.Context, data *model.RequestEntityModel) *gorm.DB
 }
 
 type request struct {
@@ -36,7 +37,7 @@ func (r *request) FindById(ctx *abstraction.Context, id int) (*model.RequestEnti
 
 	var data model.RequestEntityModel
 	err := conn.
-		Where("id = ?", id).
+		Where("id = ? AND is_delete = ?", id, false).
 		First(&data).
 		Error
 	if err != nil {
@@ -46,7 +47,7 @@ func (r *request) FindById(ctx *abstraction.Context, id int) (*model.RequestEnti
 }
 
 func (r *request) Find(ctx *abstraction.Context, no_paging bool) (data []*model.RequestEntityModel, err error) {
-	where, whereParam := general.ProcessWhereParam(ctx, "request", "")
+	where, whereParam := general.ProcessWhereParam(ctx, "request", "is_delete = @false")
 	limit, offset := general.ProcessLimitOffset(ctx, no_paging)
 	order := general.ProcessOrder(ctx)
 	err = r.CheckTrx(ctx).
@@ -60,7 +61,7 @@ func (r *request) Find(ctx *abstraction.Context, no_paging bool) (data []*model.
 }
 
 func (r *request) Count(ctx *abstraction.Context) (data *int, err error) {
-	where, whereParam := general.ProcessWhereParam(ctx, "request", "")
+	where, whereParam := general.ProcessWhereParam(ctx, "request", "is_delete = @false")
 	var count model.RequestCountDataModel
 	err = r.CheckTrx(ctx).
 		Table("request").
@@ -70,4 +71,8 @@ func (r *request) Count(ctx *abstraction.Context) (data *int, err error) {
 		Error
 	data = &count.Count
 	return
+}
+
+func (r *request) Update(ctx *abstraction.Context, data *model.RequestEntityModel) *gorm.DB {
+	return r.CheckTrx(ctx).Model(data).Where("id = ?", data.ID).Updates(data)
 }

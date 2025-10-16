@@ -10,4 +10,5 @@ func (h *handler) Route(v *echo.Group) {
 	v.POST("", h.Create, middleware.Authentication)
 
 	h.EventTypeHandler.Route(v.Group("/event-type"))
+	h.CommentHandler.Route(v.Group("/comment"))
 }

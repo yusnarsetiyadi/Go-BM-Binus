@@ -216,7 +216,7 @@ func auth(h http.Handler) http.Handler {
 func GetNotification(usersId int, db *gorm.DB) (map[string]interface{}, error) {
 
 	data := make(map[string]interface{})
-	err := db.Table("notifikasi").
+	err := db.Table("notification").
 		Select("COUNT(*) AS count").
 		Where("user_id = ? AND is_read = ?", usersId, false).
 		Find(&data).Error
@@ -242,7 +242,7 @@ func PublishNotification(usersId int, db *gorm.DB, ctx *abstraction.Context) err
 		if err := trxmanager.New(db).WithTrx(ctx, func(ctx *abstraction.Context) error {
 
 			data := make(map[string]interface{})
-			err := db.Table("notifikasi").
+			err := db.Table("notification").
 				Select("COUNT(*) AS count").
 				Where("user_id = ? AND is_read = ?", usersId, false).
 				Find(&data).Error
@@ -282,7 +282,7 @@ func PublishNotificationWithoutTransaction(usersId int, db *gorm.DB, ctx *abstra
 	check := general.StringInSlice(strconv.Itoa(usersId), channels)
 	if check {
 		data := make(map[string]interface{})
-		err := db.Table("notifikasi").
+		err := db.Table("notification").
 			Select("COUNT(*) AS count").
 			Where("user_id = ? AND is_read = ?", usersId, false).
 			Find(&data).Error

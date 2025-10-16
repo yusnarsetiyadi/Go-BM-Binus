@@ -11,6 +11,7 @@ import (
 	"bm_binus/pkg/util/general"
 	"bm_binus/pkg/util/response"
 	"bm_binus/pkg/util/trxmanager"
+	"bm_binus/pkg/ws"
 	"errors"
 	"fmt"
 	"net/http"
@@ -68,7 +69,10 @@ func SendNotif(s *service, ctx *abstraction.Context, title string, message strin
 }
 
 func (s *service) Create(ctx *abstraction.Context, payload *dto.RequestCreateRequest) (map[string]interface{}, error) {
-	var allFileUploaded []string
+	var (
+		allFileUploaded []string
+		sendNotifTo     []int
+	)
 	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
 		if ctx.Auth.RoleID != constant.ROLE_ID_STAF {
 			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "this role is not permitted")
@@ -148,7 +152,11 @@ func (s *service) Create(ctx *abstraction.Context, payload *dto.RequestCreateReq
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 		}
 		for _, v := range userBM {
-			SendNotif(s, ctx, "Notifikasi Event Baru!", modelRequest.EventName, v.ID, modelRequest.ID)
+			err := SendNotif(s, ctx, "Notifikasi Event Baru!", modelRequest.EventName, v.ID, modelRequest.ID)
+			if err != nil {
+				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+			}
+			sendNotifTo = append(sendNotifTo, v.ID)
 		}
 
 		return nil
@@ -161,6 +169,13 @@ func (s *service) Create(ctx *abstraction.Context, payload *dto.RequestCreateReq
 		}
 		return nil, err
 	}
+
+	for _, v := range general.RemoveDuplicateArrayInt(sendNotifTo) {
+		if err := ws.PublishNotificationWithoutTransaction(v, s.DB, ctx); err != nil {
+			return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+	}
+
 	return map[string]interface{}{
 		"message": "success create!",
 	}, nil
