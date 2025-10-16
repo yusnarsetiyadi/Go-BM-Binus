@@ -2,19 +2,25 @@ package event_type
 
 import (
 	"bm_binus/internal/abstraction"
+	"bm_binus/internal/dto"
 	"bm_binus/internal/factory"
+	"bm_binus/internal/model"
 	"bm_binus/internal/repository"
+	"bm_binus/pkg/constant"
 	"bm_binus/pkg/util/response"
+	"bm_binus/pkg/util/trxmanager"
+	"errors"
 	"net/http"
+	"sort"
 
 	"gorm.io/gorm"
 )
 
 type Service interface {
 	Find(ctx *abstraction.Context) (map[string]interface{}, error)
-	// Create(ctx *abstraction.Context, payload *dto.EventTypeCreateRequest) (map[string]interface{}, error)
-	// Delete(ctx *abstraction.Context, payload *dto.EventTypeDeleteByIDRequest) (map[string]interface{}, error)
-	// Update(ctx *abstraction.Context, payload *dto.EventTypeUpdateRequest) (map[string]interface{}, error)
+	Create(ctx *abstraction.Context, payload *dto.EventTypeCreateRequest) (map[string]interface{}, error)
+	Delete(ctx *abstraction.Context, payload *dto.EventTypeDeleteByIDRequest) (map[string]interface{}, error)
+	Update(ctx *abstraction.Context, payload *dto.EventTypeUpdateRequest) (map[string]interface{}, error)
 }
 
 type service struct {
@@ -32,6 +38,12 @@ func NewService(f *factory.Factory) Service {
 }
 
 func (s *service) Find(ctx *abstraction.Context) (map[string]interface{}, error) {
+	var (
+		res           []map[string]interface{} = nil
+		priorityCount                          = make(map[int]int)
+		hasDuplicate                           = false
+		priorities    []int
+	)
 	data, err := s.EventTypeRepository.Find(ctx, false)
 	if err != nil && err.Error() != "record not found" {
 		return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
@@ -40,111 +52,133 @@ func (s *service) Find(ctx *abstraction.Context) (map[string]interface{}, error)
 	if err != nil && err.Error() != "record not found" {
 		return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 	}
-	var res []map[string]interface{} = nil
+
 	for _, v := range data {
 		res = append(res, map[string]interface{}{
 			"id":       v.ID,
 			"name":     v.Name,
 			"priority": v.Priority,
 		})
+		priorityCount[v.Priority]++
+		if priorityCount[v.Priority] > 1 {
+			hasDuplicate = true
+		}
+		priorities = append(priorities, v.Priority)
 	}
-	return map[string]interface{}{
+
+	sort.Ints(priorities)
+	isSequential := true
+	for i, p := range priorities {
+		if p != i+1 {
+			isSequential = false
+			break
+		}
+	}
+
+	resReturn := map[string]interface{}{
 		"count": count,
 		"data":  res,
+	}
+	switch {
+	case hasDuplicate:
+		resReturn["info"] = "Terdapat nilai prioritas yang duplikat, segera perbaiki!"
+	case !isSequential:
+		resReturn["info"] = "Nilai prioritas tidak berurutan, segera perbaiki!"
+	default:
+		resReturn["info"] = "Nilai prioritas sudah sesuai."
+	}
+
+	return resReturn, nil
+}
+
+func (s *service) Create(ctx *abstraction.Context, payload *dto.EventTypeCreateRequest) (map[string]interface{}, error) {
+	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
+		if ctx.Auth.RoleID != constant.ROLE_ID_BM {
+			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "this role is not permitted")
+		}
+
+		modelEventType := &model.EventTypeEntityModel{
+			Context: ctx,
+			EventTypeEntity: model.EventTypeEntity{
+				Name:     payload.Name,
+				Priority: payload.Priority,
+				IsDelete: false,
+			},
+		}
+		if err := s.EventTypeRepository.Create(ctx, modelEventType).Error; err != nil {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"message": "success create!",
 	}, nil
 }
 
-// func (s *service) Create(ctx *abstraction.Context, payload *dto.EventTypeCreateRequest) (map[string]interface{}, error) {
-// 	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
-// 		if ctx.Auth.RoleID != constant.ROLE_ID_BM {
-// 			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "this role is not permitted")
-// 		}
+func (s *service) Delete(ctx *abstraction.Context, payload *dto.EventTypeDeleteByIDRequest) (map[string]interface{}, error) {
+	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
+		if ctx.Auth.RoleID != constant.ROLE_ID_BM {
+			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "this role is not permitted")
+		}
 
-// 		modelEventType := &model.EventTypeEntityModel{
-// 			Context: ctx,
-// 			EventTypeEntity: model.EventTypeEntity{
-// 				Name:     payload.Name,
-// 				Priority: payload.Priority,
-// 				IsDelete: false,
-// 			},
-// 		}
-// 		if err := s.EventTypeRepository.Create(ctx, modelEventType).Error; err != nil {
-// 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
-// 		}
+		eventTypeData, err := s.EventTypeRepository.FindById(ctx, payload.ID)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		if eventTypeData == nil {
+			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "event type not found")
+		}
 
-// 		return nil
-// 	}); err != nil {
-// 		return nil, err
-// 	}
-// 	return map[string]interface{}{
-// 		"message": "success create!",
-// 	}, nil
-// }
+		newEventTypeData := new(model.EventTypeEntityModel)
+		newEventTypeData.Context = ctx
+		newEventTypeData.ID = eventTypeData.ID
+		newEventTypeData.IsDelete = true
 
-// func (s *service) Delete(ctx *abstraction.Context, payload *dto.EventTypeDeleteByIDRequest) (map[string]interface{}, error) {
-// 	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
-// 		taskTypeData, err := s.EventTypeRepository.FindById(ctx, payload.ID)
-// 		if err != nil && err.Error() != "record not found" {
-// 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
-// 		}
-// 		if taskTypeData == nil {
-// 			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "task type not found")
-// 		}
+		if err = s.EventTypeRepository.Update(ctx, newEventTypeData).Error; err != nil {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
 
-// 		newEventTypeData := new(model.EventTypeEntityModel)
-// 		newEventTypeData.Context = ctx
-// 		newEventTypeData.ID = taskTypeData.ID
-// 		newEventTypeData.IsDelete = true
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"message": "success delete!",
+	}, nil
+}
 
-// 		if err = s.EventTypeRepository.Update(ctx, newEventTypeData).Error; err != nil {
-// 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
-// 		}
+func (s *service) Update(ctx *abstraction.Context, payload *dto.EventTypeUpdateRequest) (map[string]interface{}, error) {
+	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
+		eventTypeData, err := s.EventTypeRepository.FindById(ctx, payload.ID)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		if eventTypeData == nil {
+			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "event type not found")
+		}
 
-// 		return nil
-// 	}); err != nil {
-// 		return nil, err
-// 	}
-// 	return map[string]interface{}{
-// 		"message": "success delete!",
-// 	}, nil
-// }
+		newEventTypeData := new(model.EventTypeEntityModel)
+		newEventTypeData.Context = ctx
+		newEventTypeData.ID = payload.ID
+		if payload.Name != nil {
+			newEventTypeData.Name = *payload.Name
+		}
+		if payload.Priority != nil {
+			newEventTypeData.Priority = *payload.Priority
+		}
 
-// func (s *service) Update(ctx *abstraction.Context, payload *dto.EventTypeUpdateRequest) (map[string]interface{}, error) {
-// 	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
-// 		taskTypeData, err := s.EventTypeRepository.FindById(ctx, payload.ID)
-// 		if err != nil && err.Error() != "record not found" {
-// 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
-// 		}
-// 		if taskTypeData == nil {
-// 			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "task type not found")
-// 		}
+		if err = s.EventTypeRepository.Update(ctx, newEventTypeData).Error; err != nil {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
 
-// 		newEventTypeData := new(model.EventTypeEntityModel)
-// 		newEventTypeData.Context = ctx
-// 		newEventTypeData.ID = payload.ID
-// 		if payload.Name != nil {
-// 			newEventTypeData.Name = *payload.Name
-// 		}
-// 		if payload.EventId != nil {
-// 			taskData, err := s.EventRepository.FindById(ctx, *payload.EventId)
-// 			if err != nil && err.Error() != "record not found" {
-// 				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
-// 			}
-// 			if taskData == nil {
-// 				return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "task not found")
-// 			}
-// 			newEventTypeData.EventId = *payload.EventId
-// 		}
-
-// 		if err = s.EventTypeRepository.Update(ctx, newEventTypeData).Error; err != nil {
-// 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
-// 		}
-
-// 		return nil
-// 	}); err != nil {
-// 		return nil, err
-// 	}
-// 	return map[string]interface{}{
-// 		"message": "success update!",
-// 	}, nil
-// }
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"message": "success update!",
+	}, nil
+}
