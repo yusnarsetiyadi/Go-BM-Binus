@@ -17,7 +17,3 @@ type CommentUpdateRequest struct {
 	ID      int     `param:"id" validate:"required"`
 	Comment *string `json:"comment" form:"comment"`
 }
-
-type CommentFindByIDRequest struct {
-	ID int `param:"id" validate:"required"`
-}

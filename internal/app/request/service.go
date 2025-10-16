@@ -152,7 +152,7 @@ func (s *service) Create(ctx *abstraction.Context, payload *dto.RequestCreateReq
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 		}
 		for _, v := range userBM {
-			err := SendNotif(s, ctx, "Notifikasi Event Baru!", modelRequest.EventName, v.ID, modelRequest.ID)
+			err := SendNotif(s, ctx, "Event Baru!", modelRequest.EventName, v.ID, modelRequest.ID)
 			if err != nil {
 				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 			}
