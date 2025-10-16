@@ -11,4 +11,5 @@ func (h *handler) Route(v *echo.Group) {
 
 	h.EventTypeHandler.Route(v.Group("/event-type"))
 	h.CommentHandler.Route(v.Group("/comment"))
+	h.FileHandler.Route(v.Group("/file"))
 }

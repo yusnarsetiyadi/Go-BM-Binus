@@ -4,6 +4,7 @@ import (
 	"bm_binus/internal/abstraction"
 	"bm_binus/internal/app/request/comment"
 	"bm_binus/internal/app/request/event_type"
+	"bm_binus/internal/app/request/file"
 	"bm_binus/internal/dto"
 	"bm_binus/internal/factory"
 	"bm_binus/pkg/util/response"
@@ -18,6 +19,7 @@ type handler struct {
 
 	EventTypeHandler event_type.Handler
 	CommentHandler   comment.Handler
+	FileHandler      file.Handler
 }
 
 func NewHandler(f *factory.Factory) *handler {
@@ -26,6 +28,7 @@ func NewHandler(f *factory.Factory) *handler {
 
 		EventTypeHandler: *event_type.NewHandler(f),
 		CommentHandler:   *comment.NewHandler(f),
+		FileHandler:      *file.NewHandler(f),
 	}
 }
 

@@ -1,4 +1,4 @@
-package comment
+package file
 
 import (
 	"bm_binus/internal/abstraction"
@@ -7,41 +7,49 @@ import (
 	"bm_binus/internal/model"
 	"bm_binus/internal/repository"
 	"bm_binus/pkg/constant"
+	"bm_binus/pkg/gdrive"
 	"bm_binus/pkg/util/general"
 	"bm_binus/pkg/util/response"
 	"bm_binus/pkg/util/trxmanager"
 	"bm_binus/pkg/ws"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 
+	"github.com/sirupsen/logrus"
+	"google.golang.org/api/drive/v3"
 	"gorm.io/gorm"
 )
 
 type Service interface {
-	Create(ctx *abstraction.Context, payload *dto.CommentCreateRequest) (map[string]interface{}, error)
-	FindByRequestId(ctx *abstraction.Context, payload *dto.CommentFindByRequestIDRequest) (map[string]interface{}, error)
-	Delete(ctx *abstraction.Context, payload *dto.CommentDeleteByIDRequest) (map[string]interface{}, error)
-	Update(ctx *abstraction.Context, payload *dto.CommentUpdateRequest) (map[string]interface{}, error)
+	Create(ctx *abstraction.Context, payload *dto.FileCreateRequest) (map[string]interface{}, error)
+	FindByRequestId(ctx *abstraction.Context, payload *dto.FileFindByRequestIDRequest) (map[string]interface{}, error)
+	Delete(ctx *abstraction.Context, payload *dto.FileDeleteByIDRequest) (map[string]interface{}, error)
+	Update(ctx *abstraction.Context, payload *dto.FileUpdateRequest) (map[string]interface{}, error)
 }
 
 type service struct {
-	CommentRepository      repository.Comment
+	FileRepository         repository.File
 	RequestRepository      repository.Request
 	NotificationRepository repository.Notification
 	UserRepository         repository.User
 
-	DB *gorm.DB
+	DB     *gorm.DB
+	sDrive *drive.Service
+	fDrive *drive.File
 }
 
 func NewService(f *factory.Factory) Service {
 	return &service{
-		CommentRepository:      f.CommentRepository,
+		FileRepository:         f.FileRepository,
 		RequestRepository:      f.RequestRepository,
 		NotificationRepository: f.NotificationRepository,
 		UserRepository:         f.UserRepository,
 
-		DB: f.Db,
+		DB:     f.Db,
+		sDrive: f.GDrive.Service,
+		fDrive: f.GDrive.FolderBM,
 	}
 }
 
@@ -62,8 +70,10 @@ func SendNotif(s *service, ctx *abstraction.Context, title string, message strin
 	return nil
 }
 
-func (s *service) Create(ctx *abstraction.Context, payload *dto.CommentCreateRequest) (map[string]interface{}, error) {
+func (s *service) Create(ctx *abstraction.Context, payload *dto.FileCreateRequest) (map[string]interface{}, error) {
 	var (
+		allFileUploaded  []string
+		allFileName      []string
 		sendNotifTo      []int
 		statusesForAdmin = []int{
 			constant.STATUS_ID_PROSES,
@@ -80,16 +90,37 @@ func (s *service) Create(ctx *abstraction.Context, payload *dto.CommentCreateReq
 			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "request not found")
 		}
 
-		modelComment := &model.CommentEntityModel{
-			Context: ctx,
-			CommentEntity: model.CommentEntity{
-				RequestId: payload.RequestId,
-				Comment:   payload.Comment,
-				IsDelete:  false,
-			},
-		}
-		if err := s.CommentRepository.Create(ctx, modelComment).Error; err != nil {
-			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		for _, file := range payload.Files {
+			f, err := file.Open()
+			if err != nil {
+				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+			}
+			defer f.Close()
+
+			isFileAvailable, fullFileName := general.ValidateFileUpload(file.Filename)
+			if !isFileAvailable {
+				return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), fmt.Sprintf("file format for %s is not approved", file.Filename))
+			}
+
+			newFile, err := gdrive.CreateFile(s.sDrive, fullFileName, "application/octet-stream", f, s.fDrive.Id)
+			if err != nil {
+				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+			}
+			allFileUploaded = append(allFileUploaded, newFile.Id)
+			allFileName = append(allFileName, newFile.Name)
+
+			modelFile := &model.FileEntityModel{
+				Context: ctx,
+				FileEntity: model.FileEntity{
+					RequestId: requestData.ID,
+					File:      newFile.Id,
+					FileName:  newFile.Name,
+					IsDelete:  false,
+				},
+			}
+			if err := s.FileRepository.Create(ctx, modelFile).Error; err != nil {
+				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+			}
 		}
 
 		newRequestData := new(model.RequestEntityModel)
@@ -130,7 +161,7 @@ func (s *service) Create(ctx *abstraction.Context, payload *dto.CommentCreateReq
 		}
 
 		for _, v := range sendNotifTo {
-			err = SendNotif(s, ctx, "Komentar Baru!", payload.Comment, v, requestData.ID)
+			err = SendNotif(s, ctx, "Berkas Baru!", general.FormatNamesFromArray(allFileName), v, requestData.ID)
 			if err != nil {
 				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 			}
@@ -138,6 +169,12 @@ func (s *service) Create(ctx *abstraction.Context, payload *dto.CommentCreateReq
 
 		return nil
 	}); err != nil {
+		for _, v := range allFileUploaded {
+			errDel := gdrive.DeleteFile(s.sDrive, v)
+			if errDel != nil {
+				logrus.Error("error delete file for error trxmanager:", errDel.Error())
+			}
+		}
 		return nil, err
 	}
 
@@ -152,7 +189,7 @@ func (s *service) Create(ctx *abstraction.Context, payload *dto.CommentCreateReq
 	}, nil
 }
 
-func (s *service) FindByRequestId(ctx *abstraction.Context, payload *dto.CommentFindByRequestIDRequest) (map[string]interface{}, error) {
+func (s *service) FindByRequestId(ctx *abstraction.Context, payload *dto.FileFindByRequestIDRequest) (map[string]interface{}, error) {
 	var res []map[string]interface{} = nil
 
 	requestData, err := s.RequestRepository.FindById(ctx, payload.RequestId)
@@ -163,35 +200,34 @@ func (s *service) FindByRequestId(ctx *abstraction.Context, payload *dto.Comment
 		return nil, response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "request not found")
 	}
 
-	data, err := s.CommentRepository.FindByRequestId(ctx, payload.RequestId, true)
+	data, err := s.FileRepository.FindByRequestId(ctx, payload.RequestId, true)
 	if err != nil && err.Error() != "record not found" {
 		return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 	}
-	count, err := s.CommentRepository.CountByRequestId(ctx, payload.RequestId)
+	count, err := s.FileRepository.CountByRequestId(ctx, payload.RequestId)
 	if err != nil && err.Error() != "record not found" {
 		return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 	}
 
 	for _, v := range data {
-		edited := false
-		if v.UpdatedBy != nil {
-			edited = true
+		file, err := gdrive.GetFile(s.sDrive, v.File)
+		if err != nil {
+			return nil, response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "file not found")
 		}
+
 		res = append(res, map[string]interface{}{
 			"id":         v.ID,
 			"request_id": v.RequestId,
-			"comment":    v.Comment,
+			"file": map[string]interface{}{
+				"view_saved": general.ConvertLinkToFileSaved(file.WebContentLink, file.Name, file.FileExtension),
+				"view":       "https://lh3.googleusercontent.com/d/" + v.File,
+				"content":    file.WebContentLink,
+				"ext":        file.FileExtension,
+				"name":       file.Name,
+			},
+			"file_name":  v.FileName,
 			"created_at": general.FormatWithZWithoutChangingTime(v.CreatedAt),
 			"updated_at": general.FormatWithZWithoutChangingTime(*v.UpdatedAt),
-			"edited":     edited,
-			"created_by": map[string]interface{}{
-				"id":   v.CreateBy.ID,
-				"name": v.CreateBy.Name,
-			},
-			"updated_by": map[string]interface{}{
-				"id":   v.UpdateBy.ID,
-				"name": v.UpdateBy.Name,
-			},
 		})
 	}
 
@@ -201,27 +237,27 @@ func (s *service) FindByRequestId(ctx *abstraction.Context, payload *dto.Comment
 	}, nil
 }
 
-func (s *service) Delete(ctx *abstraction.Context, payload *dto.CommentDeleteByIDRequest) (map[string]interface{}, error) {
+func (s *service) Delete(ctx *abstraction.Context, payload *dto.FileDeleteByIDRequest) (map[string]interface{}, error) {
 	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
-		commentData, err := s.CommentRepository.FindById(ctx, payload.ID)
+		fileData, err := s.FileRepository.FindById(ctx, payload.ID)
 		if err != nil && err.Error() != "record not found" {
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 		}
-		if commentData == nil {
-			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "comment not found")
+		if fileData == nil {
+			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "file not found")
 		}
 
-		newCommentData := new(model.CommentEntityModel)
-		newCommentData.Context = ctx
-		newCommentData.ID = payload.ID
-		newCommentData.IsDelete = true
-		if err = s.CommentRepository.Update(ctx, newCommentData).Error; err != nil {
+		newFileData := new(model.FileEntityModel)
+		newFileData.Context = ctx
+		newFileData.ID = fileData.ID
+		newFileData.IsDelete = true
+		if err = s.FileRepository.Update(ctx, newFileData).Error; err != nil {
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 		}
 
 		newRequestData := new(model.RequestEntityModel)
 		newRequestData.Context = ctx
-		newRequestData.ID = commentData.RequestId
+		newRequestData.ID = fileData.RequestId
 		newRequestData.UpdatedAt = general.NowLocal()
 		if err = s.RequestRepository.Update(ctx, newRequestData).Error; err != nil {
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
@@ -237,29 +273,33 @@ func (s *service) Delete(ctx *abstraction.Context, payload *dto.CommentDeleteByI
 	}, nil
 }
 
-func (s *service) Update(ctx *abstraction.Context, payload *dto.CommentUpdateRequest) (map[string]interface{}, error) {
+func (s *service) Update(ctx *abstraction.Context, payload *dto.FileUpdateRequest) (map[string]interface{}, error) {
 	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
-		commentData, err := s.CommentRepository.FindById(ctx, payload.ID)
+		fileData, err := s.FileRepository.FindById(ctx, payload.ID)
 		if err != nil && err.Error() != "record not found" {
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 		}
-		if commentData == nil {
-			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "comment not found")
+		if fileData == nil {
+			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "file not found")
 		}
 
-		newCommentData := new(model.CommentEntityModel)
-		newCommentData.Context = ctx
-		newCommentData.ID = payload.ID
-		if payload.Comment != nil {
-			newCommentData.Comment = *payload.Comment
+		newFileData := new(model.FileEntityModel)
+		newFileData.Context = ctx
+		newFileData.ID = payload.ID
+		if payload.Name != nil {
+			_, err := gdrive.RenameFile(s.sDrive, fileData.File, *payload.Name)
+			if err != nil {
+				return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "failed rename file: "+err.Error())
+			}
+			newFileData.FileName = *payload.Name
 		}
-		if err = s.CommentRepository.Update(ctx, newCommentData).Error; err != nil {
+		if err = s.FileRepository.Update(ctx, newFileData).Error; err != nil {
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 		}
 
 		newRequestData := new(model.RequestEntityModel)
 		newRequestData.Context = ctx
-		newRequestData.ID = commentData.RequestId
+		newRequestData.ID = fileData.RequestId
 		newRequestData.UpdatedAt = general.NowLocal()
 		if err = s.RequestRepository.Update(ctx, newRequestData).Error; err != nil {
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
@@ -269,6 +309,7 @@ func (s *service) Update(ctx *abstraction.Context, payload *dto.CommentUpdateReq
 	}); err != nil {
 		return nil, err
 	}
+
 	return map[string]interface{}{
 		"message": "success update!",
 	}, nil
