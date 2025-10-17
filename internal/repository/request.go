@@ -38,6 +38,9 @@ func (r *request) FindById(ctx *abstraction.Context, id int) (*model.RequestEnti
 	var data model.RequestEntityModel
 	err := conn.
 		Where("id = ? AND is_delete = ?", id, false).
+		Preload("User").
+		Preload("EventType").
+		Preload("Status").
 		First(&data).
 		Error
 	if err != nil {

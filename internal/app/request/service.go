@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 
 	"github.com/sirupsen/logrus"
@@ -25,6 +26,9 @@ import (
 type Service interface {
 	Create(ctx *abstraction.Context, payload *dto.RequestCreateRequest) (map[string]interface{}, error)
 	Find(ctx *abstraction.Context, payload *dto.RequestFindRequest) (map[string]interface{}, error)
+	FindById(ctx *abstraction.Context, payload *dto.RequestFindByIDRequest) (map[string]interface{}, error)
+	Update(ctx *abstraction.Context, payload *dto.RequestUpdateRequest) (map[string]interface{}, error)
+	Delete(ctx *abstraction.Context, payload *dto.RequestDeleteByIDRequest) (map[string]interface{}, error)
 }
 
 type service struct {
@@ -33,6 +37,7 @@ type service struct {
 	FileRepository         repository.File
 	NotificationRepository repository.Notification
 	UserRepository         repository.User
+	StatusRepository       repository.Status
 
 	DB     *gorm.DB
 	sDrive *drive.Service
@@ -46,6 +51,7 @@ func NewService(f *factory.Factory) Service {
 		FileRepository:         f.FileRepository,
 		NotificationRepository: f.NotificationRepository,
 		UserRepository:         f.UserRepository,
+		StatusRepository:       f.StatusRepository,
 
 		DB:     f.Db,
 		sDrive: f.GDrive.Service,
@@ -208,7 +214,6 @@ func (s *service) Find(ctx *abstraction.Context, payload *dto.RequestFindRequest
 			"event_location":   v.EventLocation,
 			"event_date_start": general.FormatWithZWithoutChangingTime(v.EventDateStart),
 			"event_date_end":   general.FormatWithZWithoutChangingTime(v.EventDateEnd),
-			"description":      v.Description,
 			"event_type": map[string]interface{}{
 				"id":       v.EventType.ID,
 				"name":     v.EventType.Name,
@@ -218,9 +223,7 @@ func (s *service) Find(ctx *abstraction.Context, payload *dto.RequestFindRequest
 				"id":   v.Status.ID,
 				"name": v.Status.Name,
 			},
-			"count_participant": v.CountParticipant,
-			"created_at":        general.FormatWithZWithoutChangingTime(v.CreatedAt),
-			"updated_at":        general.FormatWithZWithoutChangingTime(*v.UpdatedAt),
+			"created_at": general.FormatWithZWithoutChangingTime(v.CreatedAt),
 		}
 		res = append(res, resData)
 
@@ -430,4 +433,256 @@ func (s *service) Find(ctx *abstraction.Context, payload *dto.RequestFindRequest
 	}
 
 	return resp, nil
+}
+
+func (s *service) FindById(ctx *abstraction.Context, payload *dto.RequestFindByIDRequest) (map[string]interface{}, error) {
+	var res map[string]interface{} = nil
+	data, err := s.RequestRepository.FindById(ctx, payload.ID)
+	if err != nil && err.Error() != "record not found" {
+		return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+	}
+	if data != nil {
+		res = map[string]interface{}{
+			"id": data.ID,
+			"user": map[string]interface{}{
+				"id":   data.User.ID,
+				"name": data.User.Name,
+			},
+			"event_name":       data.EventName,
+			"event_location":   data.EventLocation,
+			"event_date_start": general.FormatWithZWithoutChangingTime(data.EventDateStart),
+			"event_date_end":   general.FormatWithZWithoutChangingTime(data.EventDateEnd),
+			"description":      data.Description,
+			"event_type": map[string]interface{}{
+				"id":       data.EventType.ID,
+				"name":     data.EventType.Name,
+				"priority": data.EventType.Priority,
+			},
+			"count_participant": data.CountParticipant,
+			"status": map[string]interface{}{
+				"id":   data.Status.ID,
+				"name": data.Status.Name,
+			},
+			"created_at": general.FormatWithZWithoutChangingTime(data.CreatedAt),
+			"updated_at": general.FormatWithZWithoutChangingTime(*data.UpdatedAt),
+		}
+	}
+	return map[string]interface{}{
+		"data": res,
+	}, nil
+}
+
+func (s *service) Update(ctx *abstraction.Context, payload *dto.RequestUpdateRequest) (map[string]interface{}, error) {
+	var (
+		sendNotifTo      []int
+		statusesForAdmin = []int{
+			constant.STATUS_ID_PROSES,
+			constant.STATUS_ID_FINALISASI,
+			constant.STATUS_ID_SELESAI,
+		}
+	)
+	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
+		requestData, err := s.RequestRepository.FindById(ctx, payload.ID)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		if requestData == nil {
+			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "request not found")
+		}
+
+		reloadData := false
+		newRequestData := new(model.RequestEntityModel)
+		newRequestData.Context = ctx
+		newRequestData.ID = payload.ID
+		if payload.EventName != nil {
+			newRequestData.EventName = *payload.EventName
+			reloadData = true
+		}
+		if payload.EventLocation != nil {
+			newRequestData.EventLocation = *payload.EventLocation
+		}
+		if payload.EventDateStart != nil {
+			parsedEventDateStart, err := general.Parse("2006-01-02 15:04:05", *payload.EventDateStart)
+			if err != nil {
+				return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "err parse event date start:"+err.Error())
+			}
+			newRequestData.EventDateStart = parsedEventDateStart
+		}
+		if payload.EventDateEnd != nil {
+			parsedEventDateEnd, err := general.Parse("2006-01-02 15:04:05", *payload.EventDateEnd)
+			if err != nil {
+				return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "err parse event date end:"+err.Error())
+			}
+			newRequestData.EventDateEnd = parsedEventDateEnd
+		}
+		if payload.Description != nil {
+			newRequestData.Description = *payload.Description
+		}
+		if payload.EventTypeId != nil {
+			eventTypeData, err := s.EventTypeRepository.FindById(ctx, *payload.EventTypeId)
+			if err != nil && err.Error() != "record not found" {
+				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+			}
+			if eventTypeData == nil {
+				return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "event type not found")
+			}
+			newRequestData.EventTypeId = *payload.EventTypeId
+		}
+		if payload.CountParticipant != nil {
+			newRequestData.CountParticipant = *payload.CountParticipant
+		}
+		if payload.StatusId != nil {
+			statusData, err := s.StatusRepository.FindById(ctx, *payload.StatusId)
+			if err != nil && err.Error() != "record not found" {
+				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+			}
+			if statusData == nil {
+				return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "status not found")
+			}
+			newRequestData.StatusId = *payload.StatusId
+			reloadData = true
+		}
+		if err = s.RequestRepository.Update(ctx, newRequestData).Error; err != nil {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+
+		if reloadData {
+			requestData, err = s.RequestRepository.FindById(ctx, payload.ID)
+			if err != nil && err.Error() != "record not found" {
+				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+			}
+		}
+
+		userBM, err := s.UserRepository.FindByRoleIdArr(ctx, constant.ROLE_ID_BM, true)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		userAdmin, err := s.UserRepository.FindByRoleIdArr(ctx, constant.ROLE_ID_ADMIN, true)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		addIDs := func(users []*model.UserEntityModel) {
+			for _, v := range users {
+				sendNotifTo = append(sendNotifTo, v.ID)
+			}
+		}
+		switch ctx.Auth.RoleID {
+		case constant.ROLE_ID_STAF:
+			addIDs(userBM)
+			if slices.Contains(statusesForAdmin, requestData.StatusId) {
+				addIDs(userAdmin)
+			}
+		case constant.ROLE_ID_BM:
+			sendNotifTo = append(sendNotifTo, requestData.UserId)
+			if slices.Contains(statusesForAdmin, requestData.StatusId) {
+				addIDs(userAdmin)
+			}
+		case constant.ROLE_ID_ADMIN:
+			sendNotifTo = append(sendNotifTo, requestData.UserId)
+			addIDs(userBM)
+		}
+
+		for _, v := range sendNotifTo {
+			err = SendNotif(s, ctx, "Event diperbarui!", requestData.EventName, v, requestData.ID)
+			if err != nil {
+				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+			}
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	for _, v := range general.RemoveDuplicateArrayInt(sendNotifTo) {
+		if err := ws.PublishNotificationWithoutTransaction(v, s.DB, ctx); err != nil {
+			return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+	}
+
+	return map[string]interface{}{
+		"message": "success update!",
+	}, nil
+}
+
+func (s *service) Delete(ctx *abstraction.Context, payload *dto.RequestDeleteByIDRequest) (map[string]interface{}, error) {
+	var (
+		sendNotifTo      []int
+		statusesForAdmin = []int{
+			constant.STATUS_ID_PROSES,
+			constant.STATUS_ID_FINALISASI,
+			constant.STATUS_ID_SELESAI,
+		}
+	)
+	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
+		requestData, err := s.RequestRepository.FindById(ctx, payload.ID)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		if requestData == nil {
+			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "request not found")
+		}
+
+		if ctx.Auth.ID != requestData.UserId {
+			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "this role is not permitted")
+		}
+
+		newRequestData := new(model.RequestEntityModel)
+		newRequestData.Context = ctx
+		newRequestData.ID = requestData.ID
+		newRequestData.IsDelete = true
+		if err = s.RequestRepository.Update(ctx, newRequestData).Error; err != nil {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+
+		userBM, err := s.UserRepository.FindByRoleIdArr(ctx, constant.ROLE_ID_BM, true)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		userAdmin, err := s.UserRepository.FindByRoleIdArr(ctx, constant.ROLE_ID_ADMIN, true)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		addIDs := func(users []*model.UserEntityModel) {
+			for _, v := range users {
+				sendNotifTo = append(sendNotifTo, v.ID)
+			}
+		}
+		switch ctx.Auth.RoleID {
+		case constant.ROLE_ID_STAF:
+			addIDs(userBM)
+			if slices.Contains(statusesForAdmin, requestData.StatusId) {
+				addIDs(userAdmin)
+			}
+		case constant.ROLE_ID_BM:
+			sendNotifTo = append(sendNotifTo, requestData.UserId)
+			if slices.Contains(statusesForAdmin, requestData.StatusId) {
+				addIDs(userAdmin)
+			}
+		case constant.ROLE_ID_ADMIN:
+			sendNotifTo = append(sendNotifTo, requestData.UserId)
+			addIDs(userBM)
+		}
+
+		for _, v := range sendNotifTo {
+			err = SendNotif(s, ctx, "Event dihapus!", requestData.EventName, v, requestData.ID)
+			if err != nil {
+				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+			}
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	for _, v := range general.RemoveDuplicateArrayInt(sendNotifTo) {
+		if err := ws.PublishNotificationWithoutTransaction(v, s.DB, ctx); err != nil {
+			return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+	}
+
+	return map[string]interface{}{
+		"message": "success delete!",
+	}, nil
 }

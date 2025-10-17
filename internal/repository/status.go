@@ -31,7 +31,7 @@ func (r *status) FindById(ctx *abstraction.Context, id int) (*model.StatusEntity
 
 	var data model.StatusEntityModel
 	err := conn.
-		Where("id = ?", id, false).
+		Where("id = ?", id).
 		First(&data).
 		Error
 	if err != nil {
