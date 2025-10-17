@@ -12,3 +12,8 @@ type RequestCreateRequest struct {
 	CountParticipant int    `json:"count_participant" form:"count_participant" validate:"required"`
 	Files            []*multipart.FileHeader
 }
+
+type RequestFindRequest struct {
+	UseAhp          *string `query:"use_ahp"`
+	EventComplexity *string `query:"event_complexity"`
+}

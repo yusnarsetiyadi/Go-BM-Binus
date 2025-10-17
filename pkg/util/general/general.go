@@ -333,6 +333,11 @@ func ProcessWhereParam(ctx *abstraction.Context, searchType string, whereStr str
 		where += " AND event_type_id = @event_type_id"
 		whereParam["event_type_id"] = val
 	}
+	if ctx.QueryParam("user_id") != "" {
+		val, _ := strconv.Atoi(SanitizeStringOfNumber(ctx.QueryParam("user_id")))
+		where += " AND user_id = @user_id"
+		whereParam["user_id"] = val
+	}
 	if ctx.QueryParam("status_id") != "" {
 		val, _ := strconv.Atoi(SanitizeStringOfNumber(ctx.QueryParam("status_id")))
 		where += " AND status_id = @status_id"
@@ -378,6 +383,19 @@ func ProcessWhereParam(ctx *abstraction.Context, searchType string, whereStr str
 		where += " AND event_date_end BETWEEN @start_event_date_end AND @end_event_date_end"
 		whereParam["start_event_date_end"] = valDate[0] + " 00:00:00"
 		whereParam["end_event_date_end"] = valDate[1] + " 23:59:59"
+	}
+
+	// fill random filter
+	if ctx.QueryParam("for") != "" {
+		val := SanitizeString(ctx.QueryParam("for"))
+		switch val {
+		case "staf":
+			where += " AND status_id IN (1,2,3,4,5)"
+		case "bm":
+			where += " AND status_id IN (1,2,3,4,5)"
+		case "admin":
+			where += " AND status_id IN (3,4,5)"
+		}
 	}
 
 	return where, whereParam

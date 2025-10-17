@@ -11,7 +11,6 @@ import (
 	"bm_binus/pkg/util/trxmanager"
 	"errors"
 	"net/http"
-	"sort"
 
 	"gorm.io/gorm"
 )
@@ -42,7 +41,6 @@ func (s *service) Find(ctx *abstraction.Context) (map[string]interface{}, error)
 		res           []map[string]interface{} = nil
 		priorityCount                          = make(map[int]int)
 		hasDuplicate                           = false
-		priorities    []int
 	)
 	data, err := s.EventTypeRepository.Find(ctx, false)
 	if err != nil && err.Error() != "record not found" {
@@ -63,16 +61,6 @@ func (s *service) Find(ctx *abstraction.Context) (map[string]interface{}, error)
 		if priorityCount[v.Priority] > 1 {
 			hasDuplicate = true
 		}
-		priorities = append(priorities, v.Priority)
-	}
-
-	sort.Ints(priorities)
-	isSequential := true
-	for i, p := range priorities {
-		if p != i+1 {
-			isSequential = false
-			break
-		}
 	}
 
 	resReturn := map[string]interface{}{
@@ -82,8 +70,6 @@ func (s *service) Find(ctx *abstraction.Context) (map[string]interface{}, error)
 	switch {
 	case hasDuplicate:
 		resReturn["info"] = "Terdapat nilai prioritas yang duplikat, segera perbaiki!"
-	case !isSequential:
-		resReturn["info"] = "Nilai prioritas tidak berurutan, segera perbaiki!"
 	default:
 		resReturn["info"] = "Nilai prioritas sudah sesuai."
 	}

@@ -55,6 +55,9 @@ func (r *request) Find(ctx *abstraction.Context, no_paging bool) (data []*model.
 		Order(order).
 		Limit(limit).
 		Offset(offset).
+		Preload("User").
+		Preload("EventType").
+		Preload("Status").
 		Find(&data).
 		Error
 	return

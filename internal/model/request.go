@@ -29,6 +29,7 @@ type RequestEntityModel struct {
 
 	abstraction.Entity
 
+	User      UserEntityModel      `json:"user" gorm:"foreignKey:UserId"`
 	EventType EventTypeEntityModel `json:"event_type" gorm:"foreignKey:EventTypeId"`
 	Status    StatusEntityModel    `json:"status" gorm:"foreignKey:StatusId"`
 

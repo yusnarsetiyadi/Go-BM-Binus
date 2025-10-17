@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/drive/v3"
@@ -23,6 +24,7 @@ import (
 
 type Service interface {
 	Create(ctx *abstraction.Context, payload *dto.RequestCreateRequest) (map[string]interface{}, error)
+	Find(ctx *abstraction.Context, payload *dto.RequestFindRequest) (map[string]interface{}, error)
 }
 
 type service struct {
@@ -179,4 +181,253 @@ func (s *service) Create(ctx *abstraction.Context, payload *dto.RequestCreateReq
 	return map[string]interface{}{
 		"message": "success create!",
 	}, nil
+}
+
+func (s *service) Find(ctx *abstraction.Context, payload *dto.RequestFindRequest) (map[string]interface{}, error) {
+	var (
+		res  []map[string]interface{} = nil
+		alts []general.AltRaw
+	)
+	data, err := s.RequestRepository.Find(ctx, false)
+	if err != nil && err.Error() != "record not found" {
+		return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+	}
+	count, err := s.RequestRepository.Count(ctx)
+	if err != nil && err.Error() != "record not found" {
+		return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+	}
+
+	for _, v := range data {
+		resData := map[string]interface{}{
+			"id": v.ID,
+			"user": map[string]interface{}{
+				"id":   v.User.ID,
+				"name": v.User.Name,
+			},
+			"event_name":       v.EventName,
+			"event_location":   v.EventLocation,
+			"event_date_start": general.FormatWithZWithoutChangingTime(v.EventDateStart),
+			"event_date_end":   general.FormatWithZWithoutChangingTime(v.EventDateEnd),
+			"description":      v.Description,
+			"event_type": map[string]interface{}{
+				"id":       v.EventType.ID,
+				"name":     v.EventType.Name,
+				"priority": v.EventType.Priority,
+			},
+			"status": map[string]interface{}{
+				"id":   v.Status.ID,
+				"name": v.Status.Name,
+			},
+			"count_participant": v.CountParticipant,
+			"created_at":        general.FormatWithZWithoutChangingTime(v.CreatedAt),
+			"updated_at":        general.FormatWithZWithoutChangingTime(*v.UpdatedAt),
+		}
+		res = append(res, resData)
+
+		alts = append(alts, general.AltRaw{
+			ID:                v.ID,
+			UserID:            v.User.ID,
+			UserName:          v.User.Name,
+			EventName:         v.EventName,
+			EventLocation:     v.EventLocation,
+			EventDateStart:    v.EventDateStart,
+			EventDateEnd:      v.EventDateEnd,
+			Description:       v.Description,
+			EventTypeID:       v.EventType.ID,
+			EventTypeName:     v.EventType.Name,
+			EventTypePriority: v.EventType.Priority,
+			StatusID:          v.Status.ID,
+			StatusName:        v.Status.Name,
+			CountParticipant:  v.CountParticipant,
+			CreatedAt:         v.CreatedAt,
+			UpdatedAt:         v.UpdatedAt,
+		})
+	}
+
+	// ahp
+	if payload.UseAhp != nil && *payload.UseAhp == "yes" {
+		fmt.Println("=== [AHP MODE AKTIF] ===")
+
+		complexityMap := map[int]float64{}
+		if payload.EventComplexity != nil && *payload.EventComplexity != "" {
+			fmt.Println("-> Parsing EventComplexity JSON...")
+			complexityMap = general.ParseComplexities(*payload.EventComplexity)
+			fmt.Println("   Hasil parsing complexityMap:", complexityMap)
+		}
+
+		n := len(alts)
+		if n > 0 {
+			fmt.Printf("-> Jumlah alternatif: %d\n", n)
+
+			// siapkan slice skor
+			urgencyScores := make([]float64, n)
+			importanceScores := make([]float64, n)
+			participantScores := make([]float64, n)
+			complexityScores := make([]float64, n)
+
+			for i, a := range alts {
+				urgencyScores[i] = general.ComputeUrgencyScore(a.CreatedAt, a.EventDateStart)
+				priority := a.EventTypePriority
+				if priority <= 0 {
+					priority = 1
+				}
+				importanceScores[i] = float64(1) / float64(priority)
+				participantScores[i] = float64(a.CountParticipant)
+
+				compVal := 1.0
+				if c, ok := complexityMap[a.ID]; ok {
+					compVal = c
+				}
+				complexityScores[i] = 6.0 - compVal
+			}
+
+			fmt.Println("\n--- [SKOR AWAL SETIAP KRITERIA] ---")
+			for i, a := range alts {
+				fmt.Printf("%d. %s\n", i+1, a.EventName)
+				fmt.Printf("   Urgency: %.4f\n", urgencyScores[i])
+				fmt.Printf("   Importance: %.4f\n", importanceScores[i])
+				fmt.Printf("   Participants: %.4f\n", participantScores[i])
+				fmt.Printf("   Complexity: %.4f\n", complexityScores[i])
+			}
+
+			critNames := []string{"Urgency", "Importance", "Participants", "Complexity"}
+			critImportanceRaw := []float64{5, 3, 2, 1}
+			fmt.Println("\n--- [KRITERIA UTAMA] ---")
+			fmt.Println("Nama:", critNames)
+			fmt.Println("Bobot Awal:", critImportanceRaw)
+
+			criteriaMatrix := general.BuildPairwiseFromScores(critImportanceRaw)
+			fmt.Println("\nMatriks Perbandingan Kriteria:")
+			general.PrintMatrix(criteriaMatrix)
+
+			criteriaWeights, criteriaCR := general.CalculateAHP(criteriaMatrix)
+			fmt.Printf("Bobot Kriteria: %.4f %.4f %.4f %.4f\n", criteriaWeights[0], criteriaWeights[1], criteriaWeights[2], criteriaWeights[3])
+			fmt.Printf("CR (Consistency Ratio): %.4f\n", criteriaCR)
+
+			// build pairwise alternative matrices
+			mUrgency := general.BuildPairwiseFromScores(urgencyScores)
+			wUrgency, crUrgency := general.CalculateAHP(mUrgency)
+			fmt.Println("\n--- [AHP Urgency] ---")
+			general.PrintMatrix(mUrgency)
+			fmt.Println("Bobot alternatif:", wUrgency)
+			fmt.Printf("CR: %.4f\n", crUrgency)
+
+			mImportance := general.BuildPairwiseFromScores(importanceScores)
+			wImportance, crImportance := general.CalculateAHP(mImportance)
+			fmt.Println("\n--- [AHP Importance] ---")
+			general.PrintMatrix(mImportance)
+			fmt.Println("Bobot alternatif:", wImportance)
+			fmt.Printf("CR: %.4f\n", crImportance)
+
+			mParticipant := general.BuildPairwiseFromScores(participantScores)
+			wParticipant, crParticipant := general.CalculateAHP(mParticipant)
+			fmt.Println("\n--- [AHP Participants] ---")
+			general.PrintMatrix(mParticipant)
+			fmt.Println("Bobot alternatif:", wParticipant)
+			fmt.Printf("CR: %.4f\n", crParticipant)
+
+			mComplexity := general.BuildPairwiseFromScores(complexityScores)
+			wComplexity, crComplexity := general.CalculateAHP(mComplexity)
+			fmt.Println("\n--- [AHP Complexity] ---")
+			general.PrintMatrix(mComplexity)
+			fmt.Println("Bobot alternatif:", wComplexity)
+			fmt.Printf("CR: %.4f\n", crComplexity)
+
+			// hitung skor akhir
+			finalScores := make([]float64, n)
+			for i := 0; i < n; i++ {
+				finalScores[i] = criteriaWeights[0]*wUrgency[i] +
+					criteriaWeights[1]*wImportance[i] +
+					criteriaWeights[2]*wParticipant[i] +
+					criteriaWeights[3]*wComplexity[i]
+			}
+
+			fmt.Println("\n--- [FINAL SCORE SETIAP ALTERNATIF] ---")
+			for i, a := range alts {
+				fmt.Printf("%s: %.6f\n", a.EventName, finalScores[i])
+			}
+
+			// ranking
+			type rItem struct {
+				ID    int
+				Name  string
+				Score float64
+			}
+			var ranked []rItem
+			for i, a := range alts {
+				ranked = append(ranked, rItem{
+					ID:    a.ID,
+					Name:  a.EventName,
+					Score: finalScores[i],
+				})
+			}
+			sort.SliceStable(ranked, func(i, j int) bool {
+				return ranked[i].Score > ranked[j].Score
+			})
+
+			fmt.Println("\n--- [RANKING AKHIR] ---")
+			for i, r := range ranked {
+				fmt.Printf("%d. %s (Score: %.6f)\n", i+1, r.Name, r.Score)
+			}
+
+			// siapkan hasil ahpResult
+			altResults := []map[string]interface{}{}
+			for idx, it := range ranked {
+				altResults = append(altResults, map[string]interface{}{
+					"rank":  idx + 1,
+					"id":    it.ID,
+					"name":  it.Name,
+					"score": it.Score,
+				})
+			}
+
+			if len(res) == len(alts) {
+				// buat map untuk lookup skor AHP berdasarkan ID
+				scoreMap := make(map[int]float64)
+				for _, r := range ranked {
+					scoreMap[r.ID] = r.Score
+				}
+
+				// normalisasi skor jadi persen (0–100)
+				maxScore := ranked[0].Score
+				minScore := ranked[len(ranked)-1].Score
+				diff := maxScore - minScore
+				if diff == 0 {
+					diff = 1 // biar gak bagi 0
+				}
+
+				// tambahkan ahp_score ke setiap item res sesuai ID
+				for _, r := range res {
+					id, ok := r["id"].(int)
+					if !ok {
+						continue
+					}
+					score := scoreMap[id]
+					total := 0.0
+					for _, v := range scoreMap {
+						total += v
+					}
+					percent := (score / total) * 100
+					r["ahp_score"] = map[string]interface{}{
+						"raw":     score,
+						"percent": fmt.Sprintf("%.2f%%", percent),
+					}
+				}
+
+				// urutkan ulang res berdasarkan ranking
+				sort.SliceStable(res, func(i, j int) bool {
+					idI, _ := res[i]["id"].(int)
+					idJ, _ := res[j]["id"].(int)
+					return scoreMap[idI] > scoreMap[idJ]
+				})
+			}
+		}
+	}
+
+	resp := map[string]interface{}{
+		"count": count,
+		"data":  res,
+	}
+
+	return resp, nil
 }

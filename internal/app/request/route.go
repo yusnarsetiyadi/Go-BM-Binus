@@ -8,6 +8,7 @@ import (
 
 func (h *handler) Route(v *echo.Group) {
 	v.POST("", h.Create, middleware.Authentication)
+	v.GET("", h.Find, middleware.Authentication)
 
 	h.EventTypeHandler.Route(v.Group("/event-type"))
 	h.CommentHandler.Route(v.Group("/comment"))
