@@ -12,6 +12,8 @@ func (h *handler) Route(v *echo.Group) {
 	v.GET("/:id", h.FindById, middleware.Authentication)
 	v.PUT("/:id", h.Update, middleware.Authentication)
 	v.DELETE("/:id", h.Delete, middleware.Authentication)
+	v.GET("/export", h.Export, middleware.Authentication)
+	v.GET("/export/:id", h.ExportById, middleware.Authentication)
 
 	h.EventTypeHandler.Route(v.Group("/event-type"))
 	h.CommentHandler.Route(v.Group("/comment"))

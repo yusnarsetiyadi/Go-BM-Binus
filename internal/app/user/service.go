@@ -14,6 +14,8 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/jung-kurt/gofpdf"
@@ -315,16 +317,19 @@ func (s *service) Export(ctx *abstraction.Context, payload *dto.UserExportReques
 		pdf.SetFont("Arial", "B", 16)
 		pdf.Cell(0, 10, "Building Management Binus - Laporan Data Pengguna")
 		pdf.Ln(12)
+
 		pdf.SetFont("Arial", "B", 10)
 		header := []string{
 			"No", "Nama", "Email", "Peran", "Tanggal Terdaftar",
 		}
-		colWidths := []float64{10, 40, 50, 40, 60}
+		colWidths := []float64{10, 50, 60, 50, 60}
+
 		for i, str := range header {
 			pdf.CellFormat(colWidths[i], 8, str, "1", 0, "C", false, 0, "")
 		}
 		pdf.Ln(-1)
 		pdf.SetFont("Arial", "", 9)
+		lineHeight := 5.0
 
 		for i, v := range data {
 			no := fmt.Sprintf("%d", i+1)
@@ -335,25 +340,29 @@ func (s *service) Export(ctx *abstraction.Context, payload *dto.UserExportReques
 				v.Role.Name,
 				general.ConvertDateTimeToIndonesian(v.CreatedAt.Format("2006-01-02 15:04:05")),
 			}
-			startY := pdf.GetY()
-			maxHeight := 0.0
 
+			startX := pdf.GetX()
+			startY := pdf.GetY()
+
+			maxHeight := 0.0
 			for j, txt := range row {
 				lines := pdf.SplitLines([]byte(txt), colWidths[j])
-				h := float64(len(lines)) * 5
+				h := float64(len(lines)) * lineHeight
 				if h > maxHeight {
 					maxHeight = h
 				}
 			}
-			xStart := pdf.GetX()
-			for j, txt := range row {
-				x := pdf.GetX()
-				y := pdf.GetY()
 
-				pdf.MultiCell(colWidths[j], 5, txt, "1", "", false)
-				pdf.SetXY(x+colWidths[j], y)
+			x := startX
+			for j, txt := range row {
+				pdf.Rect(x, startY, colWidths[j], maxHeight, "")
+				pdf.SetXY(x, startY)
+				pdf.MultiCell(colWidths[j], lineHeight, txt, "", "", false)
+
+				x += colWidths[j]
 			}
-			pdf.SetXY(xStart, startY+maxHeight)
+
+			pdf.SetXY(startX, startY+maxHeight)
 		}
 
 		var buf bytes.Buffer
@@ -363,7 +372,6 @@ func (s *service) Export(ctx *abstraction.Context, payload *dto.UserExportReques
 
 		filename := "Building Management Binus - Laporan Data Pengguna.pdf"
 		return filename, &buf, "pdf", nil
-
 	} else {
 		f := excelize.NewFile()
 		sheet := "BM Binus"
@@ -390,6 +398,54 @@ func (s *service) Export(ctx *abstraction.Context, payload *dto.UserExportReques
 			f.SetCellValue(sheet, colC, v.Email)
 			f.SetCellValue(sheet, colD, v.Role.Name)
 			f.SetCellValue(sheet, colE, general.ConvertDateTimeToIndonesian(v.CreatedAt.Format("2006-01-02 15:04:05")))
+		}
+
+		styleID, _ := f.NewStyle(&excelize.Style{
+			Alignment: &excelize.Alignment{
+				WrapText: true,
+				Vertical: "top",
+			},
+		})
+		f.SetCellStyle(sheet, "A1", fmt.Sprintf("E%d", len(data)+1), styleID)
+
+		cols := []string{"A", "B", "C", "D", "E"}
+		lastRow := len(data) + 1
+
+		for _, col := range cols {
+			maxLen := 0
+			headerCell := fmt.Sprintf("%s%d", col, 1)
+			if val, err := f.GetCellValue(sheet, headerCell); err == nil {
+				l := utf8.RuneCountInString(val)
+				if l > maxLen {
+					maxLen = l
+				}
+			}
+			for r := 2; r <= lastRow; r++ {
+				cell := fmt.Sprintf("%s%d", col, r)
+				if val, err := f.GetCellValue(sheet, cell); err == nil {
+					lines := strings.Split(val, "\n")
+					for _, ln := range lines {
+						l := utf8.RuneCountInString(ln)
+						if l > maxLen {
+							maxLen = l
+						}
+					}
+				}
+			}
+			factor := 1.1
+			padding := 2.0
+			minWidth := 10.0
+			maxWidth := 80.0
+
+			width := float64(maxLen)*factor + padding
+			if width < minWidth {
+				width = minWidth
+			}
+			if width > maxWidth {
+				width = maxWidth
+			}
+
+			_ = f.SetColWidth(sheet, col, col, width)
 		}
 
 		var buf bytes.Buffer

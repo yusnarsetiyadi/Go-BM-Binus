@@ -12,13 +12,20 @@ import (
 	"bm_binus/pkg/util/response"
 	"bm_binus/pkg/util/trxmanager"
 	"bm_binus/pkg/ws"
+	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"sort"
+	"strings"
+	"time"
+	"unicode/utf8"
 
+	"github.com/jung-kurt/gofpdf"
 	"github.com/sirupsen/logrus"
+	"github.com/xuri/excelize/v2"
 	"google.golang.org/api/drive/v3"
 	"gorm.io/gorm"
 )
@@ -29,6 +36,8 @@ type Service interface {
 	FindById(ctx *abstraction.Context, payload *dto.RequestFindByIDRequest) (map[string]interface{}, error)
 	Update(ctx *abstraction.Context, payload *dto.RequestUpdateRequest) (map[string]interface{}, error)
 	Delete(ctx *abstraction.Context, payload *dto.RequestDeleteByIDRequest) (map[string]interface{}, error)
+	Export(ctx *abstraction.Context, payload *dto.RequestExportRequest) (string, *bytes.Buffer, string, error)
+	ExportById(ctx *abstraction.Context, payload *dto.RequestExportByIDRequest) (string, *bytes.Buffer, string, error)
 }
 
 type service struct {
@@ -38,6 +47,7 @@ type service struct {
 	NotificationRepository repository.Notification
 	UserRepository         repository.User
 	StatusRepository       repository.Status
+	CommentRepository      repository.Comment
 
 	DB     *gorm.DB
 	sDrive *drive.Service
@@ -52,6 +62,7 @@ func NewService(f *factory.Factory) Service {
 		NotificationRepository: f.NotificationRepository,
 		UserRepository:         f.UserRepository,
 		StatusRepository:       f.StatusRepository,
+		CommentRepository:      f.CommentRepository,
 
 		DB:     f.Db,
 		sDrive: f.GDrive.Service,
@@ -685,4 +696,367 @@ func (s *service) Delete(ctx *abstraction.Context, payload *dto.RequestDeleteByI
 	return map[string]interface{}{
 		"message": "success delete!",
 	}, nil
+}
+
+func (s *service) Export(ctx *abstraction.Context, payload *dto.RequestExportRequest) (string, *bytes.Buffer, string, error) {
+	data, err := s.RequestRepository.Find(ctx, true)
+	if err != nil && err.Error() != "record not found" {
+		return "", nil, "", response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+	}
+
+	if payload.Format == "pdf" {
+		pdf := gofpdf.New("P", "mm", "A4", "")
+		pdf.SetMargins(15, 10, 15)
+		pdf.AddPage()
+
+		pdf.SetFont("Arial", "B", 16)
+		pdf.CellFormat(0, 10, "Building Management Binus - Laporan Pengajuan Event", "", 1, "C", false, 0, "")
+		pdf.Ln(8)
+
+		pdf.SetFont("Arial", "", 10)
+
+		for i, v := range data {
+			pdf.SetFont("Arial", "B", 12)
+			pdf.CellFormat(0, 8, fmt.Sprintf("Event #%d", i+1), "", 1, "", false, 0, "")
+			pdf.SetFont("Arial", "", 10)
+
+			pdf.MultiCell(0, 6, fmt.Sprintf("Staf Binus        : %s", v.User.Name), "", "", false)
+			pdf.MultiCell(0, 6, fmt.Sprintf("Nama Event        : %s", v.EventName), "", "", false)
+			pdf.MultiCell(0, 6, fmt.Sprintf("Lokasi Event      : %s", v.EventLocation), "", "", false)
+			pdf.MultiCell(0, 6, fmt.Sprintf("Tipe Event        : %s", v.EventType.Name), "", "", false)
+			pdf.MultiCell(0, 6, fmt.Sprintf("Tanggal Mulai     : %s", general.ConvertDateTimeToIndonesian(v.EventDateStart.Format("2006-01-02 15:04:05"))), "", "", false)
+			pdf.MultiCell(0, 6, fmt.Sprintf("Tanggal Selesai   : %s", general.ConvertDateTimeToIndonesian(v.EventDateEnd.Format("2006-01-02 15:04:05"))), "", "", false)
+			pdf.MultiCell(0, 6, fmt.Sprintf("Tanggal Pengajuan : %s", general.ConvertDateTimeToIndonesian(v.CreatedAt.Format("2006-01-02 15:04:05"))), "", "", false)
+			pdf.MultiCell(0, 6, fmt.Sprintf("Status            : %s", v.Status.Name), "", "", false)
+
+			pdf.Ln(6)
+			pdf.SetDrawColor(200, 200, 200)
+			pdf.Line(15, pdf.GetY(), 195, pdf.GetY())
+			pdf.Ln(6)
+
+			if pdf.GetY() > 270 {
+				pdf.AddPage()
+			}
+		}
+
+		var buf bytes.Buffer
+		if err := pdf.Output(&buf); err != nil {
+			return "", nil, "", response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+
+		filename := "Building Management Binus - Laporan Pengajuan Event.pdf"
+		return filename, &buf, "pdf", nil
+	} else {
+		f := excelize.NewFile()
+		sheet := "BM Binus"
+		index, err := f.NewSheet(general.TruncateSheetName(sheet))
+		if err != nil {
+			return "", nil, "", response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		f.DeleteSheet("Sheet1")
+		f.SetActiveSheet(index)
+
+		f.SetCellValue(sheet, "A1", "No")
+		f.SetCellValue(sheet, "B1", "Staf Binus")
+		f.SetCellValue(sheet, "C1", "Nama Event")
+		f.SetCellValue(sheet, "D1", "Lokasi Event")
+		f.SetCellValue(sheet, "E1", "Tanggal Mulai Event")
+		f.SetCellValue(sheet, "F1", "Tanggal Selesai Event")
+		f.SetCellValue(sheet, "G1", "Tipe Event")
+		f.SetCellValue(sheet, "H1", "Tanggal Pengajuan")
+		f.SetCellValue(sheet, "I1", "Status")
+
+		for i, v := range data {
+			colA := fmt.Sprintf("A%d", i+2)
+			colB := fmt.Sprintf("B%d", i+2)
+			colC := fmt.Sprintf("C%d", i+2)
+			colD := fmt.Sprintf("D%d", i+2)
+			colE := fmt.Sprintf("E%d", i+2)
+			colF := fmt.Sprintf("F%d", i+2)
+			colG := fmt.Sprintf("G%d", i+2)
+			colH := fmt.Sprintf("H%d", i+2)
+			colI := fmt.Sprintf("I%d", i+2)
+			no := i + 1
+			f.SetCellValue(sheet, colA, no)
+			f.SetCellValue(sheet, colB, v.User.Name)
+			f.SetCellValue(sheet, colC, v.EventName)
+			f.SetCellValue(sheet, colD, v.EventLocation)
+			f.SetCellValue(sheet, colE, general.ConvertDateTimeToIndonesian(v.EventDateStart.Format("2006-01-02 15:04:05")))
+			f.SetCellValue(sheet, colF, general.ConvertDateTimeToIndonesian(v.EventDateEnd.Format("2006-01-02 15:04:05")))
+			f.SetCellValue(sheet, colG, v.EventType.Name)
+			f.SetCellValue(sheet, colH, general.ConvertDateTimeToIndonesian(v.CreatedAt.Format("2006-01-02 15:04:05")))
+			f.SetCellValue(sheet, colI, v.Status.Name)
+		}
+
+		styleID, _ := f.NewStyle(&excelize.Style{
+			Alignment: &excelize.Alignment{
+				WrapText: true,
+				Vertical: "top",
+			},
+		})
+		f.SetCellStyle(sheet, "A1", fmt.Sprintf("M%d", len(data)+1), styleID)
+
+		cols := []string{"A", "B", "C", "D", "E", "F", "G", "H", "I"}
+		lastRow := len(data) + 1
+
+		for _, col := range cols {
+			maxLen := 0
+			headerCell := fmt.Sprintf("%s%d", col, 1)
+			if val, err := f.GetCellValue(sheet, headerCell); err == nil {
+				l := utf8.RuneCountInString(val)
+				if l > maxLen {
+					maxLen = l
+				}
+			}
+			for r := 2; r <= lastRow; r++ {
+				cell := fmt.Sprintf("%s%d", col, r)
+				if val, err := f.GetCellValue(sheet, cell); err == nil {
+					lines := strings.Split(val, "\n")
+					for _, ln := range lines {
+						l := utf8.RuneCountInString(ln)
+						if l > maxLen {
+							maxLen = l
+						}
+					}
+				}
+			}
+			factor := 1.1
+			padding := 2.0
+			minWidth := 10.0
+			maxWidth := 100.0
+
+			width := float64(maxLen)*factor + padding
+			if width < minWidth {
+				width = minWidth
+			}
+			if width > maxWidth {
+				width = maxWidth
+			}
+
+			_ = f.SetColWidth(sheet, col, col, width)
+		}
+
+		var buf bytes.Buffer
+		if err := f.Write(&buf); err != nil {
+			return "", nil, "", response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+
+		filename := "Building Management Binus - Laporan Pengajuan Event.xlsx"
+		return filename, &buf, "excel", nil
+	}
+}
+
+func (s *service) ExportById(ctx *abstraction.Context, payload *dto.RequestExportByIDRequest) (string, *bytes.Buffer, string, error) {
+	data, err := s.RequestRepository.FindById(ctx, payload.ID)
+	if err != nil && err.Error() != "record not found" {
+		return "", nil, "", response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+	}
+	if data == nil {
+		return "", nil, "", response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "data not found")
+	}
+
+	pdf := gofpdf.New("P", "mm", "A4", "")
+
+	// ==== HEADER ====
+	pdf.SetHeaderFunc(func() {
+		binusLogoPath := "./assets/images/binus-logo.png"
+		bmLogoPath := "./assets/images/bm-logo.png"
+
+		// Logo kiri (Binus) — diperbesar
+		pdf.ImageOptions(
+			binusLogoPath,
+			15, // posisi X
+			8,  // posisi Y sedikit naik
+			32, // lebar logo (lebih besar)
+			0,  // tinggi otomatis
+			false,
+			gofpdf.ImageOptions{ImageType: "PNG", ReadDpi: true},
+			0,
+			"",
+		)
+
+		// Logo kanan (BM) — diperbesar & sejajar
+		pdf.ImageOptions(
+			bmLogoPath,
+			170, // posisi X (geser sedikit kiri biar sejajar proporsional)
+			8,   // posisi Y
+			28,  // lebar logo
+			0,   // tinggi otomatis
+			false,
+			gofpdf.ImageOptions{ImageType: "PNG", ReadDpi: true},
+			0,
+			"",
+		)
+
+		pdf.SetFont("Arial", "B", 16)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetXY(15, 15)
+		pdf.CellFormat(180, 8, "Building Management", "", 0, "C", false, 0, "")
+
+		pdf.SetFont("Arial", "", 10)
+		pdf.SetXY(15, 22)
+		pdf.CellFormat(180, 6, "Universitas Bina Nusantara", "", 0, "C", false, 0, "")
+		pdf.SetDrawColor(180, 180, 180)
+		pdf.Line(15, 30, 195, 30)
+		pdf.Ln(15)
+	})
+
+	// ==== FOOTER ====
+	pdf.SetFooterFunc(func() {
+		pdf.SetY(-15)
+		pdf.SetFont("Arial", "I", 8)
+		pdf.CellFormat(
+			0, 10,
+			fmt.Sprintf("Generated by Building Management Binus - %s",
+				general.ConvertDateTimeToIndonesian(time.Now().Format("2006-01-02 15:04:05"))),
+			"", 0, "C", false, 0, "",
+		)
+	})
+
+	// ==== HALAMAN DAN MARGIN ====
+	pdf.SetMargins(15, 35, 15)
+	pdf.AddPage()
+
+	// ==== JUDUL LAPORAN ====
+	pdf.SetFont("Arial", "B", 18)
+	title := data.EventName
+	if title == "" {
+		title = "Laporan Pengajuan Event"
+	}
+	pdf.CellFormat(0, 10, title, "", 1, "C", false, 0, "")
+	pdf.Ln(5)
+
+	var (
+		linkFiles       []map[string]interface{}
+		historyComments []string
+	)
+
+	fileData, err := s.FileRepository.FindByRequestId(ctx, data.ID, true)
+	if err != nil && err.Error() != "record not found" {
+		return "", nil, "", response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+	}
+
+	commentData, err := s.CommentRepository.FindByRequestId(ctx, data.ID, true)
+	if err != nil && err.Error() != "record not found" {
+		return "", nil, "", response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+	}
+
+	for _, file := range fileData {
+		f, err := gdrive.GetFile(s.sDrive, file.File)
+		if err != nil {
+			return "", nil, "", response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "file not found")
+		}
+		linkFiles = append(linkFiles, map[string]interface{}{
+			"file": f.WebContentLink,
+			"name": file.FileName,
+		})
+	}
+
+	for _, comment := range commentData {
+		historyComments = append(historyComments, fmt.Sprintf("[%s] %s: %s",
+			comment.CreatedAt.Format("2006-01-02 15:04:05"),
+			comment.CreateBy.Name,
+			comment.Comment))
+	}
+
+	pdf.SetDrawColor(200, 200, 200)
+	pdf.SetFillColor(248, 248, 248)
+	pdf.SetLineWidth(0.4)
+	pdf.Rect(15, pdf.GetY(), 180, 0, "D")
+	pdf.Ln(2)
+
+	pdf.SetFont("Arial", "B", 11)
+	pdf.CellFormat(40, 7, "Staf Binus", "0", 0, "", false, 0, "")
+	pdf.SetFont("Arial", "", 11)
+	pdf.MultiCell(0, 7, fmt.Sprintf(": %s", data.User.Name), "", "L", false)
+
+	pdf.SetFont("Arial", "B", 11)
+	pdf.CellFormat(40, 7, "Lokasi Event", "0", 0, "", false, 0, "")
+	pdf.SetFont("Arial", "", 11)
+	pdf.MultiCell(0, 7, fmt.Sprintf(": %s", data.EventLocation), "", "L", false)
+
+	pdf.SetFont("Arial", "B", 11)
+	pdf.CellFormat(40, 7, "Tipe Event", "0", 0, "", false, 0, "")
+	pdf.SetFont("Arial", "", 11)
+	pdf.MultiCell(0, 7, fmt.Sprintf(": %s", data.EventType.Name), "", "L", false)
+
+	pdf.SetFont("Arial", "B", 11)
+	pdf.CellFormat(40, 7, "Tanggal Mulai", "0", 0, "", false, 0, "")
+	pdf.SetFont("Arial", "", 11)
+	pdf.MultiCell(0, 7, fmt.Sprintf(": %s", general.ConvertDateTimeToIndonesian(data.EventDateStart.Format("2006-01-02 15:04:05"))), "", "L", false)
+
+	pdf.SetFont("Arial", "B", 11)
+	pdf.CellFormat(40, 7, "Tanggal Selesai", "0", 0, "", false, 0, "")
+	pdf.SetFont("Arial", "", 11)
+	pdf.MultiCell(0, 7, fmt.Sprintf(": %s", general.ConvertDateTimeToIndonesian(data.EventDateEnd.Format("2006-01-02 15:04:05"))), "", "L", false)
+
+	pdf.SetFont("Arial", "B", 11)
+	pdf.CellFormat(40, 7, "Jumlah Peserta", "0", 0, "", false, 0, "")
+	pdf.SetFont("Arial", "", 11)
+	pdf.MultiCell(0, 7, fmt.Sprintf(": %d", data.CountParticipant), "", "L", false)
+
+	pdf.SetFont("Arial", "B", 11)
+	pdf.CellFormat(40, 7, "Tanggal Pengajuan", "0", 0, "", false, 0, "")
+	pdf.SetFont("Arial", "", 11)
+	pdf.MultiCell(0, 7, fmt.Sprintf(": %s", general.ConvertDateTimeToIndonesian(data.CreatedAt.Format("2006-01-02 15:04:05"))), "", "L", false)
+
+	pdf.SetFont("Arial", "B", 11)
+	pdf.CellFormat(40, 7, "Status", "0", 0, "", false, 0, "")
+	pdf.SetFont("Arial", "", 11)
+	pdf.MultiCell(0, 7, fmt.Sprintf(": %s", data.Status.Name), "", "L", false)
+
+	pdf.Ln(4)
+	pdf.SetDrawColor(220, 220, 220)
+	pdf.Line(15, pdf.GetY(), 195, pdf.GetY())
+	pdf.Ln(6)
+
+	pdf.SetFont("Arial", "B", 12)
+	pdf.CellFormat(0, 7, "Deskripsi", "", 1, "", false, 0, "")
+	pdf.SetFont("Arial", "", 11)
+	pdf.MultiCell(0, 7, data.Description, "", "L", false)
+
+	pdf.Ln(4)
+
+	if len(linkFiles) > 0 {
+		pdf.SetFont("Arial", "B", 12)
+		pdf.CellFormat(0, 7, "Berkas", "", 1, "", false, 0, "")
+		pdf.SetFont("Arial", "", 11)
+
+		for _, link := range linkFiles {
+			file := link["file"].(string)
+			name := link["name"].(string)
+			pdf.SetTextColor(0, 0, 255)
+			pdf.MultiCell(0, 6, file, "", "L", false)
+			pdf.SetTextColor(0, 0, 0)
+			pdf.CellFormat(0, 6, fmt.Sprintf("[%s]", name), "", 1, "", false, 0, "")
+			pdf.Ln(2)
+		}
+		pdf.Ln(2)
+	}
+
+	if len(historyComments) > 0 {
+		pdf.SetFont("Arial", "B", 12)
+		pdf.CellFormat(0, 7, "Riwayat Komentar", "", 1, "", false, 0, "")
+		pdf.SetFont("Arial", "", 11)
+		for _, c := range historyComments {
+			pdf.MultiCell(0, 7, c, "", "L", false)
+			pdf.Ln(2)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		return "", nil, "", response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+	}
+
+	sanitizeRe := regexp.MustCompile(`[^\w\s\-\.\_]`)
+	safeName := sanitizeRe.ReplaceAllString(title, "")
+	safeName = strings.TrimSpace(safeName)
+	safeName = strings.ReplaceAll(safeName, " ", "_")
+	if len(safeName) > 80 {
+		safeName = safeName[:80]
+	}
+	filename := fmt.Sprintf("Building Management Binus - %s.pdf", safeName)
+
+	return filename, &buf, "pdf", nil
 }

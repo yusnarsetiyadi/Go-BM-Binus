@@ -37,3 +37,11 @@ type RequestUpdateRequest struct {
 type RequestDeleteByIDRequest struct {
 	ID int `param:"id" validate:"required"`
 }
+
+type RequestExportRequest struct {
+	Format string `query:"format" validate:"required"`
+}
+
+type RequestExportByIDRequest struct {
+	ID int `param:"id" validate:"required"`
+}
