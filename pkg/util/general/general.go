@@ -343,6 +343,11 @@ func ProcessWhereParam(ctx *abstraction.Context, searchType string, whereStr str
 		where += " AND status_id = @status_id"
 		whereParam["status_id"] = val
 	}
+	if ctx.QueryParam("reference_request") != "" {
+		val, _ := strconv.Atoi(SanitizeStringOfNumber(ctx.QueryParam("reference_request")))
+		where += " AND reference_request = @reference_request"
+		whereParam["reference_request"] = val
+	}
 	if ctx.QueryParam("created_by") != "" {
 		val, _ := strconv.Atoi(SanitizeStringOfNumber(ctx.QueryParam("created_by")))
 		where += " AND created_by = @created_by"

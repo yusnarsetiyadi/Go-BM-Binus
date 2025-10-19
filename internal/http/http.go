@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	ahphistory "bm_binus/internal/app/ahp_history"
 	"bm_binus/internal/app/auth"
 	"bm_binus/internal/app/notification"
 	"bm_binus/internal/app/request"
@@ -37,4 +38,5 @@ func Init(e *echo.Echo, f *factory.Factory) {
 	user.NewHandler(f).Route(e.Group("/user"))
 	notification.NewHandler(f).Route(e.Group("/notification"))
 	request.NewHandler(f).Route(e.Group("/request"))
+	ahphistory.NewHandler(f).Route(e.Group("/ahp-history"))
 }

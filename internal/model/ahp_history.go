@@ -12,6 +12,7 @@ type AhpHistoryEntity struct {
 	Alternatif           string `json:"alternatif"`
 	AlternatifComparison string `json:"alternatif_comparison"`
 	PriorityGlobal       string `json:"priority_global"`
+	ReferenceRequest     int    `json:"reference_request"`
 	IsDelete             bool   `json:"is_delete"`
 }
 
