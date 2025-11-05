@@ -14,4 +14,5 @@ func (h *handler) Route(v *echo.Group) {
 	v.DELETE("/:id", h.Delete, middleware.Authentication)
 	v.PATCH("/change-password/:id", h.ChangePassword, middleware.Authentication)
 	v.GET("/export", h.Export, middleware.Authentication)
+	v.GET("/info", h.Info, middleware.Authentication)
 }

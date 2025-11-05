@@ -117,3 +117,11 @@ func (h handler) Export(c echo.Context) (err error) {
 	}
 	return response.SendBlobData(c, filename, *data, format)
 }
+
+func (h handler) Info(c echo.Context) (err error) {
+	data, err := h.service.Info(c.(*abstraction.Context))
+	if err != nil {
+		return response.ErrorResponse(err).SendError(c)
+	}
+	return response.SuccessResponse(data).SendSuccess(c)
+}

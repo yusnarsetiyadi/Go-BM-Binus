@@ -33,6 +33,7 @@ type Service interface {
 	Delete(ctx *abstraction.Context, payload *dto.UserDeleteByIDRequest) (map[string]interface{}, error)
 	ChangePassword(ctx *abstraction.Context, payload *dto.UserChangePasswordRequest) (map[string]interface{}, error)
 	Export(ctx *abstraction.Context, payload *dto.UserExportRequest) (string, *bytes.Buffer, string, error)
+	Info(ctx *abstraction.Context) (map[string]interface{}, error)
 }
 
 type service struct {
@@ -455,4 +456,29 @@ func (s *service) Export(ctx *abstraction.Context, payload *dto.UserExportReques
 		filename := "Building Management Binus - Laporan Data Pengguna.xlsx"
 		return filename, &buf, "excel", nil
 	}
+}
+
+func (s *service) Info(ctx *abstraction.Context) (map[string]interface{}, error) {
+	var res map[string]interface{} = nil
+	data, err := s.UserRepository.FindById(ctx, ctx.Auth.ID)
+	if err != nil && err.Error() != "record not found" {
+		return nil, response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+	}
+	if data != nil {
+		res = map[string]interface{}{
+			"id":         data.ID,
+			"name":       data.Name,
+			"email":      data.Email,
+			"created_at": general.FormatWithZWithoutChangingTime(data.CreatedAt),
+			"updated_at": general.FormatWithZWithoutChangingTime(*data.UpdatedAt),
+			"role": map[string]interface{}{
+				"id":   data.Role.ID,
+				"name": data.Role.Name,
+			},
+		}
+
+	}
+	return map[string]interface{}{
+		"data": res,
+	}, nil
 }
