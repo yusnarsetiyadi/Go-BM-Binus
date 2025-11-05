@@ -55,3 +55,13 @@ func (m *RequestEntityModel) BeforeCreate(tx *gorm.DB) (err error) {
 	// m.CreatedAt = *general.Now()
 	return
 }
+
+type RequestCountByStatus struct {
+	StatusID int `json:"status_id"`
+	Total    int `json:"total"`
+}
+
+type RequestCountByEventType struct {
+	EventTypeID int `json:"event_type_id"`
+	Total       int `json:"total"`
+}

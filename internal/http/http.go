@@ -6,6 +6,7 @@ import (
 
 	ahphistory "bm_binus/internal/app/ahp_history"
 	"bm_binus/internal/app/auth"
+	"bm_binus/internal/app/dashboard"
 	"bm_binus/internal/app/notification"
 	"bm_binus/internal/app/request"
 	"bm_binus/internal/app/role"
@@ -39,4 +40,5 @@ func Init(e *echo.Echo, f *factory.Factory) {
 	notification.NewHandler(f).Route(e.Group("/notification"))
 	request.NewHandler(f).Route(e.Group("/request"))
 	ahphistory.NewHandler(f).Route(e.Group("/ahp-history"))
+	dashboard.NewHandler(f).Route(e.Group("/dashboard"))
 }

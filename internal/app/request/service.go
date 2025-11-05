@@ -23,6 +23,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/jung-kurt/gofpdf"
 	"github.com/sirupsen/logrus"
 	"github.com/xuri/excelize/v2"
@@ -49,9 +50,10 @@ type service struct {
 	StatusRepository       repository.Status
 	CommentRepository      repository.Comment
 
-	DB     *gorm.DB
-	sDrive *drive.Service
-	fDrive *drive.File
+	DB      *gorm.DB
+	DbRedis *redis.Client
+	sDrive  *drive.Service
+	fDrive  *drive.File
 }
 
 func NewService(f *factory.Factory) Service {
@@ -64,9 +66,10 @@ func NewService(f *factory.Factory) Service {
 		StatusRepository:       f.StatusRepository,
 		CommentRepository:      f.CommentRepository,
 
-		DB:     f.Db,
-		sDrive: f.GDrive.Service,
-		fDrive: f.GDrive.FolderBM,
+		DB:      f.Db,
+		DbRedis: f.DbRedis,
+		sDrive:  f.GDrive.Service,
+		fDrive:  f.GDrive.FolderBM,
 	}
 }
 
@@ -261,6 +264,7 @@ func (s *service) Find(ctx *abstraction.Context, payload *dto.RequestFindRequest
 	// ahp
 	if payload.UseAhp != nil && *payload.UseAhp == "yes" {
 		fmt.Println("=== [AHP MODE AKTIF] ===")
+		general.AddUsePriorityCount(s.DbRedis)
 
 		complexityMap := map[int]float64{}
 		if payload.EventComplexity != nil && *payload.EventComplexity != "" {

@@ -32,6 +32,7 @@ type Repository_initiated struct {
 	FileRepository         repository.File
 	CommentRepository      repository.Comment
 	AhpHistoryRepository   repository.AhpHistory
+	DashboardRepository    repository.Dashboard
 }
 
 type GoogleDrive struct {
@@ -97,4 +98,5 @@ func (f *Factory) SetupRepository() {
 	f.FileRepository = repository.NewFile(f.Db)
 	f.CommentRepository = repository.NewComment(f.Db)
 	f.AhpHistoryRepository = repository.NewAhpHistory(f.Db)
+	f.DashboardRepository = repository.NewDashboard(f.Db)
 }

@@ -20,7 +20,7 @@ func Init(e *echo.Echo, redisClient *redis.Client) {
 	dbRedis = redisClient
 
 	e.Use(Context)
-	e.Use(LoginAttempt(NewLoginAttemptMemoryStore(5)))
+	e.Use(LoginAttempt(NewLoginAttemptMemoryStore(10)))
 	e.Use(
 		echoMiddleware.Recover(),
 		// echoMiddleware.Gzip(),

@@ -1,10 +1,14 @@
 package general
 
 import (
+	"bm_binus/pkg/constant"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 // --- Helper AHP utilities ---
@@ -210,4 +214,19 @@ type AltRaw struct {
 	CountParticipant  int
 	CreatedAt         time.Time
 	UpdatedAt         *time.Time
+}
+
+func AddUsePriorityCount(client *redis.Client) error {
+	ctx := context.Background()
+	_, err := client.Incr(ctx, constant.REDIS_KEY_USE_PRIORITY_COUNT).Result()
+	return err
+}
+
+func GetUsePriorityCount(client *redis.Client) (int64, error) {
+	ctx := context.Background()
+	count, err := client.Get(ctx, constant.REDIS_KEY_USE_PRIORITY_COUNT).Int64()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	return count, err
 }

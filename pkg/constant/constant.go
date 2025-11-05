@@ -15,13 +15,14 @@ const (
 
 	BLANK_REQUEST_ID = 1
 
-	REDIS_REQUEST_IP_KEYS      = "reset-password:ip:%s"
-	REDIS_REQUEST_MAX_ATTEMPTS = 5
-	REDIS_REQUEST_IP_EXPIRE    = 240
-	REDIS_KEY_USER_LOGIN       = "login_token_user_"
-	REDIS_KEY_AUTO_LOGOUT      = "user_auto_logout"
-	REDIS_KEY_REFRESH_TOKEN    = "refresh-token:%s"
-	REDIS_MAX_REFRESH_TOKEN    = 30
+	REDIS_REQUEST_IP_KEYS        = "bmbinus-reset-password:ip:%s"
+	REDIS_REQUEST_MAX_ATTEMPTS   = 10
+	REDIS_REQUEST_IP_EXPIRE      = 240
+	REDIS_KEY_USER_LOGIN         = "bmbinus_login_token_user_"
+	REDIS_KEY_AUTO_LOGOUT        = "bmbinus_user_auto_logout"
+	REDIS_KEY_REFRESH_TOKEN      = "bmbinus-refresh-token:%s"
+	REDIS_MAX_REFRESH_TOKEN      = 30
+	REDIS_KEY_USE_PRIORITY_COUNT = "use_priority_count"
 
 	PATH_FILE_SAVED    = "../file_saved"
 	PATH_ASSETS_IMAGES = "assets/images"
