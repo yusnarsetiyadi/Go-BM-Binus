@@ -448,7 +448,7 @@ func ProcessOrder(ctx *abstraction.Context) string {
 func ValidationOrder(str string) string {
 	str = SanitizeString(str)
 	str = strings.ToLower(str)
-	orderStack := []string{"id", "name", "email", "priority", "created_at", "event_name", "event_location", "event_type_id", "count_participant", "status_id"} // fill query order
+	orderStack := []string{"id", "name", "email", "priority", "created_at", "event_name", "event_location", "event_type_id", "count_participant", "status_id", "is_read"} // fill query order
 	for _, item := range orderStack {
 		if item == str {
 			return str
