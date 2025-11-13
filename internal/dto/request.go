@@ -39,7 +39,9 @@ type RequestDeleteByIDRequest struct {
 }
 
 type RequestExportRequest struct {
-	Format string `query:"format" validate:"required"`
+	Format   string `query:"format" validate:"required"`
+	UserId   *int   `query:"user_id"`
+	ForAdmin *bool  `query:"for_admin"`
 }
 
 type RequestExportByIDRequest struct {

@@ -708,6 +708,29 @@ func (s *service) Export(ctx *abstraction.Context, payload *dto.RequestExportReq
 		return "", nil, "", response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
 	}
 
+	var filteredData []*model.RequestEntityModel
+
+	for _, d := range data {
+		match := true
+
+		if payload.UserId != nil && d.UserId != *payload.UserId {
+			match = false
+		}
+
+		if payload.ForAdmin != nil && *payload.ForAdmin &&
+			(d.StatusId != constant.STATUS_ID_PROSES &&
+				d.StatusId != constant.STATUS_ID_FINALISASI &&
+				d.StatusId != constant.STATUS_ID_SELESAI) {
+			match = false
+		}
+
+		if match {
+			filteredData = append(filteredData, d)
+		}
+	}
+
+	data = filteredData
+
 	if payload.Format == "pdf" {
 		pdf := gofpdf.New("P", "mm", "A4", "")
 		pdf.SetMargins(15, 10, 15)
