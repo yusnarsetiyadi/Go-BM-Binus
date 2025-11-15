@@ -32,7 +32,7 @@ func NewComment(db *gorm.DB) *comment {
 func (r *comment) FindByRequestId(ctx *abstraction.Context, request_id int, no_paging bool) (data []*model.CommentEntityModel, err error) {
 	where, whereParam := general.ProcessWhereParam(ctx, "comment", "is_delete = @false"+fmt.Sprintf(" AND request_id = %d", request_id))
 	limit, offset := general.ProcessLimitOffset(ctx, no_paging)
-	order := "created_at DESC"
+	order := "created_at ASC"
 	err = r.CheckTrx(ctx).
 		Where(where, whereParam).
 		Order(order).
