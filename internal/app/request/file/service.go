@@ -238,6 +238,15 @@ func (s *service) FindByRequestId(ctx *abstraction.Context, payload *dto.FileFin
 }
 
 func (s *service) Delete(ctx *abstraction.Context, payload *dto.FileDeleteByIDRequest) (map[string]interface{}, error) {
+	var (
+		fileNameDelete   string
+		sendNotifTo      []int
+		statusesForAdmin = []int{
+			constant.STATUS_ID_PROSES,
+			constant.STATUS_ID_FINALISASI,
+			constant.STATUS_ID_SELESAI,
+		}
+	)
 	if err := trxmanager.New(s.DB).WithTrx(ctx, func(ctx *abstraction.Context) error {
 		fileData, err := s.FileRepository.FindById(ctx, payload.ID)
 		if err != nil && err.Error() != "record not found" {
@@ -247,6 +256,12 @@ func (s *service) Delete(ctx *abstraction.Context, payload *dto.FileDeleteByIDRe
 			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "file not found")
 		}
 
+		requestData, err := s.RequestRepository.FindById(ctx, fileData.RequestId)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+
+		fileNameDelete = fileData.FileName
 		newFileData := new(model.FileEntityModel)
 		newFileData.Context = ctx
 		newFileData.ID = fileData.ID
@@ -261,6 +276,42 @@ func (s *service) Delete(ctx *abstraction.Context, payload *dto.FileDeleteByIDRe
 		newRequestData.UpdatedAt = general.NowLocal()
 		if err = s.RequestRepository.Update(ctx, newRequestData).Error; err != nil {
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+
+		userBM, err := s.UserRepository.FindByRoleIdArr(ctx, constant.ROLE_ID_BM, true)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		userAdmin, err := s.UserRepository.FindByRoleIdArr(ctx, constant.ROLE_ID_ADMIN, true)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+		addIDs := func(users []*model.UserEntityModel) {
+			for _, v := range users {
+				sendNotifTo = append(sendNotifTo, v.ID)
+			}
+		}
+		switch ctx.Auth.RoleID {
+		case constant.ROLE_ID_STAF:
+			addIDs(userBM)
+			if slices.Contains(statusesForAdmin, requestData.StatusId) {
+				addIDs(userAdmin)
+			}
+		case constant.ROLE_ID_BM:
+			sendNotifTo = append(sendNotifTo, requestData.UserId)
+			if slices.Contains(statusesForAdmin, requestData.StatusId) {
+				addIDs(userAdmin)
+			}
+		case constant.ROLE_ID_ADMIN:
+			sendNotifTo = append(sendNotifTo, requestData.UserId)
+			addIDs(userBM)
+		}
+
+		for _, v := range sendNotifTo {
+			err = SendNotif(s, ctx, "Berkas dihapus!", fileNameDelete, v, requestData.ID)
+			if err != nil {
+				return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+			}
 		}
 
 		return nil
