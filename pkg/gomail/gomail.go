@@ -29,6 +29,7 @@ func SendMail(recipient, subject, bodyHtml string) error {
 		config.Get().Gomail.AuthEmail,
 		config.Get().Gomail.AuthPassword,
 	)
+	dialer.SSL = true
 
 	err := dialer.DialAndSend(mailer)
 	if err != nil {
