@@ -21,7 +21,7 @@ import (
 )
 
 // @title bm_binus
-// @version 1.0.1
+// @version 1.0.0
 // @description This is a doc for bm_binus
 
 func main() {
