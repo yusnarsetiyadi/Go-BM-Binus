@@ -109,6 +109,34 @@ func (s *service) Create(ctx *abstraction.Context, payload *dto.RequestCreateReq
 			return response.ErrorBuilder(http.StatusBadRequest, errors.New("bad_request"), "err parse event date end:"+err.Error())
 		}
 
+		if !parsedEventDateStart.Before(parsedEventDateEnd) {
+			return response.ErrorBuilder(
+				http.StatusBadRequest,
+				errors.New("bad_request"),
+				"Tanggal mulai harus lebih kecil dari tanggal selesai",
+			)
+		}
+
+		allDataRequest, err := s.RequestRepository.Find(ctx, true)
+		if err != nil && err.Error() != "record not found" {
+			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
+		}
+
+		for _, v := range allDataRequest {
+			existStart := v.EventDateStart
+			existEnd := v.EventDateEnd
+
+			if parsedEventDateStart.Before(existEnd) &&
+				parsedEventDateEnd.After(existStart) {
+
+				return response.ErrorBuilder(
+					http.StatusBadRequest,
+					errors.New("event_date_conflict"),
+					"Tanggal event bentrok dengan event lain",
+				)
+			}
+		}
+
 		eventTypeData, err := s.EventTypeRepository.FindById(ctx, payload.EventTypeId)
 		if err != nil && err.Error() != "record not found" {
 			return response.ErrorBuilder(http.StatusInternalServerError, err, "server_error")
