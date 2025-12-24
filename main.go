@@ -22,7 +22,7 @@ import (
 
 // @title bm_binus
 // @version 1.0.1
-// @description This is a doc for bm_binus
+// @description This is a doc for bm_binus.
 
 func main() {
 	config.Init()
